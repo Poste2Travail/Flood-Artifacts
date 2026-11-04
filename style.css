@@ -1,4 +1,11 @@
-/* Flood Tuber Package Builder — dark theme (tokens taken from the Grok prototype) */
+/*
+ * Flood Tuber Package Builder — stylesheet.
+ *
+ * Dark theme. All colours and fonts are CSS custom properties defined on :root
+ * below, so a new theme only needs new values here.
+ * Sections (in order): tokens, base, layout, form fields, slots, preview,
+ * settings, actions, magic wand editor.
+ */
 
 :root {
   --bg: #050508;
@@ -515,7 +522,7 @@ select:focus {
   text-underline-offset: 4px;
 }
 
-/* ---------- Baguette magique ---------- */
+/* ---------- Magic wand ---------- */
 
 .wand {
   flex-shrink: 0;
@@ -632,7 +639,7 @@ select:focus {
 }
 
 .wand-canvas-wrap {
-  display: grid; /* avec margin:auto sur le canvas, le zoom reste défilable */
+  display: grid; /* with margin:auto on the canvas, zoomed content stays scrollable */
   max-height: 60vh;
   overflow: auto;
   padding: 8px;
@@ -685,7 +692,7 @@ select:focus {
 }
 
 #wandCanvas {
-  touch-action: none; /* permet le dessin au doigt sans défiler */
+  touch-action: none; /* allows drawing with a finger without scrolling */
 }
 
 .check-inline {
