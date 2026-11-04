@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<!--
+  Flood Tuber Package Builder — single-page static tool.
+  Markup only. Behaviour lives in app.js, styling in style.css.
+  Text is English by default; app.js replaces every [data-i18n] element with the
+  selected language from the `translations` object.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Build a Flood Tuber avatar package: drop sprites, check alignment, write settings.ini, download a ZIP.">
+  <meta name="theme-color" content="#050508">
+  <title>Flood Tuber Package Builder</title>
+  <link rel="icon" type="image/png" href="https://floodtechlab.com/favicon-96x96.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
+<body>
+  <main class="wrap">
+    <!-- Header: logo, language switcher and intro. Buttons use data-lang; app.js wires them. -->
+    <header class="hero">
+      <img src="assets/logo.png" alt="Flood Tuber" class="logo">
+      <div class="lang-switcher">
+        <button data-lang="en" class="lang-btn active">EN</button>
+        <button data-lang="tr" class="lang-btn">TR</button>
+        <button data-lang="fr" class="lang-btn">FR</button>
+        <button data-lang="ja" class="lang-btn">日本語</button>
+        <button data-lang="zh" class="lang-btn">中文（简体）</button>
+      </div>
+      <div>
+        <p class="eyebrow">FLOOD TUBER</p>
+        <h1 data-i18n="title">Flood Tuber Package Builder</h1>
+        <p class="subtitle" data-i18n="subtitle">Drop PNG, GIF, APNG or WebP into the slots, check the overlay, then download a ZIP with settings.ini.</p>
+        <button id="tutoBtn" type="button" class="btn tuto-btn"><span data-i18n="tutorials">Tutorials</span></button>
+      </div>
+    </header>
+
+    <!-- The avatar name becomes the folder name inside the ZIP (non-alphanumerics are replaced in the file name). -->
+    <label class="name-field">
+      <span data-i18n="avatarName">Avatar name (folder):</span>
+      <input type="text" id="avatarName" value="My Avatar" placeholder="Avatar name">
+    </label>
+
+    <!--
+      Nine sprite slots. Each .slot's data-name is the file name written into the ZIP.
+      Keep these names in sync with the `order` array in updatePreview() (app.js).
+    -->
+    <section class="card">
+      <h2 class="section-title" data-i18n="slotsTitle">Sprite slots</h2>
+      <div class="slots">
+        <div class="slot" data-name="idle.png" role="button" tabindex="0">
+          <div class="slot-head"><span class="slot-name">idle.png</span><span class="badge" data-i18n="required">required</span></div>
+          <div class="dropzone checker" id="drop-idle"><span class="hint" data-i18n="clickOrDrop">Click or drop</span></div>
+          <input type="file" accept="image/png,image/gif,image/webp,image/apng,.png,.gif,.webp,.apng" hidden>
+        </div>
+        <div class="slot" data-name="blink.png" role="button" tabindex="0">
+          <div class="slot-head"><span class="slot-name">blink.png</span></div>
+          <div class="dropzone checker" id="drop-blink"><span class="hint" data-i18n="clickOrDrop">Click or drop</span></div>
+          <input type="file" accept="image/png,image/gif,image/webp,image/apng,.png,.gif,.webp,.apng" hidden>
+        </div>
+        <div class="slot" data-name="action.png" role="button" tabindex="0">
+          <div class="slot-head"><span class="slot-name">action.png</span></div>
+          <div class="dropzone checker" id="drop-action"><span class="hint" data-i18n="clickOrDrop">Click or drop</span></div>
+          <input type="file" accept="image/png,image/gif,image/webp,image/apng,.png,.gif,.webp,.apng" hidden>
+        </div>
+        <div class="slot" data-name="talk_a.png" role="button" tabindex="0">
+          <div class="slot-head"><span class="slot-name">talk_a.png</span></div>
+          <div class="dropzone checker" id="drop-talk_a"><span class="hint" data-i18n="clickOrDrop">Click or drop</span></div>
+          <input type="file" accept="image/png,image/gif,image/webp,image/apng,.png,.gif,.webp,.apng" hidden>
+        </div>
+        <div class="slot" data-name="talk_b.png" role="button" tabindex="0">
+          <div class="slot-head"><span class="slot-name">talk_b.png</span></div>
+          <div class="dropzone checker" id="drop-talk_b"><span class="hint" data-i18n="clickOrDrop">Click or drop</span></div>
+          <input type="file" accept="image/png,image/gif,image/webp,image/apng,.png,.gif,.webp,.apng" hidden>
+        </div>
+        <div class="slot" data-name="talk_c.png" role="button" tabindex="0">
+          <div class="slot-head"><span class="slot-name">talk_c.png</span></div>
+          <div class="dropzone checker" id="drop-talk_c"><span class="hint" data-i18n="clickOrDrop">Click or drop</span></div>
+          <input type="file" accept="image/png,image/gif,image/webp,image/apng,.png,.gif,.webp,.apng" hidden>
+        </div>
+        <div class="slot" data-name="talk_a_blink.png" role="button" tabindex="0">
+          <div class="slot-head"><span class="slot-name">talk_a_blink.png</span></div>
+          <div class="dropzone checker" id="drop-talk_a_blink"><span class="hint" data-i18n="clickOrDrop">Click or drop</span></div>
+          <input type="file" accept="image/png,image/gif,image/webp,image/apng,.png,.gif,.webp,.apng" hidden>
+        </div>
+        <div class="slot" data-name="talk_b_blink.png" role="button" tabindex="0">
+          <div class="slot-head"><span class="slot-name">talk_b_blink.png</span></div>
+          <div class="dropzone checker" id="drop-talk_b_blink"><span class="hint" data-i18n="clickOrDrop">Click or drop</span></div>
+          <input type="file" accept="image/png,image/gif,image/webp,image/apng,.png,.gif,.webp,.apng" hidden>
+        </div>
+        <div class="slot" data-name="talk_c_blink.png" role="button" tabindex="0">
+          <div class="slot-head"><span class="slot-name">talk_c_blink.png</span></div>
+          <div class="dropzone checker" id="drop-talk_c_blink"><span class="hint" data-i18n="clickOrDrop">Click or drop</span></div>
+          <input type="file" accept="image/png,image/gif,image/webp,image/apng,.png,.gif,.webp,.apng" hidden>
+        </div>
+      </div>
+    </section>
+
+    <!-- Preview: stacked layers (#stack, filled by updatePreview) and simulation / blend controls. -->
+    <section class="card">
+      <div class="preview-head">
+        <h2 class="section-title" data-i18n="previewTitle">Overlay preview</h2>
+        <div class="preview-tools">
+          <label class="slider">
+            <span data-i18n="globalOpacity">Opacity:</span>
+            <input type="range" id="globalOpacity" min="10" max="100" value="70">
+          </label>
+          <button id="simulate" class="btn" aria-pressed="false"><span data-i18n="simulate">Simulate pattern</span></button>
+          <button id="diffMode" class="btn" aria-pressed="false"><span data-i18n="diffMode">Difference</span></button>
+          <button id="toggleAll" class="btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path><path d="m2 2 20 20"></path></svg>
+            <span data-i18n="toggleAll">Show / Hide all</span>
+          </button>
+        </div>
+      </div>
+      <div class="layer-controls" id="layerControls"></div>
+      <p id="simState" class="sim-state" hidden></p>
+      <div class="viewer checker" id="viewer">
+        <div class="stack" id="stack"></div>
+        <p class="empty" id="stackEmpty" data-i18n="stackEmpty">Add idle.png to see the stack.</p>
+      </div>
+    </section>
+
+    <!--
+      settings.ini form. Each input's id is the INI key written by generateSettingsIni() in app.js.
+      These keys are read by Flood Tuber: do not rename them.
+    -->
+    <section class="card">
+      <h2 class="section-title" data-i18n="settingsTitle">settings.ini</h2>
+      <div class="settings-grid">
+        <label>Activation Threshold (dB) <input type="number" id="threshold" value="-20"></label>
+        <label>Release Delay (ms) <input type="number" id="release_delay" value="300"></label>
+        <label>Mouth Speed (sec/frame) <input type="number" step="0.01" id="talking_speed" value="0.10"></label>
+        <label>Blink Duration (ms) <input type="number" id="blink_duration" value="150"></label>
+        <label>Min Interval (ms) <input type="number" id="blink_interval_min" value="2000"></label>
+        <label>Max Interval (ms) <input type="number" id="blink_interval_max" value="5000"></label>
+        <label>Action Duration (ms) <input type="number" id="action_duration" value="2000"></label>
+        <label>Min Wait (ms) <input type="number" id="action_interval_min" value="8000"></label>
+        <label>Max Wait (ms) <input type="number" id="action_interval_max" value="15000"></label>
+        <label>Effect
+          <select id="motion_type">
+            <option value="None">None</option>
+            <option value="Shake">Shake</option>
+            <option value="Bounce" selected>Bounce</option>
+            <option value="Oscillating">Oscillating</option>
+          </select>
+        </label>
+        <label>Speed (%) <input type="number" id="motion_speed" value="100"></label>
+        <label>Strength <input type="number" id="motion_strength" value="15"></label>
+        <label>Reference Height (px) <input type="number" id="reference_height" value="512"></label>
+        <label class="check">Mirror Horizontally <input type="checkbox" id="mirror"></label>
+      </div>
+    </section>
+
+    <!-- ZIP export: button, busy loader and status message (styled by #status.is-ok / is-bad / is-busy). -->
+    <section class="actions">
+      <button id="generateZip" class="primary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+        <span data-i18n="generateZip">Download ZIP package</span>
+      </button>
+      <div id="loader" class="loader" hidden></div>
+      <p id="status" role="status"></p>
+    </section>
+  </main>
+
+  <!-- Magic wand editor: opened from a slot's wand button. Logic is in the "Magic wand" section of app.js. -->
+  <dialog id="wandDialog" class="wand-dialog">
+    <div class="wand-box">
+      <h2 class="section-title" data-i18n="wandTitle">Magic wand</h2>
+      <p class="wand-hint" data-i18n="wandHint">Click on the background to make it transparent. Adjust the tolerance if needed.</p>
+      <p class="wand-hint wand-keys" data-i18n="wandKeys">Ctrl+Z undo · Ctrl+Shift+Z redo · Ctrl+wheel zoom</p>
+      <div class="wand-tools" role="group">
+        <button type="button" class="btn tool" data-tool="flood" aria-pressed="true"><span data-i18n="toolWand">Wand</span></button>
+        <button type="button" class="btn tool" data-tool="eraser" aria-pressed="false"><span data-i18n="toolEraser">Eraser</span></button>
+        <button type="button" class="btn tool" data-tool="magic" aria-pressed="false"><span data-i18n="toolMagic">Magic eraser</span></button>
+        <button type="button" class="btn" id="wandUndo" disabled><span data-i18n="wandUndo">Undo</span></button>
+        <button type="button" class="btn" id="wandRedo" disabled><span data-i18n="wandRedo">Redo</span></button>
+        <span class="zoom-group">
+          <button type="button" class="btn" id="wandZoomMinus" aria-label="Zoom out">−</button>
+          <output id="wandZoomLabel" class="zoom-label">100 %</output>
+          <button type="button" class="btn" id="wandZoomPlus" aria-label="Zoom in">+</button>
+          <button type="button" class="btn" id="wandZoomFit"><span data-i18n="zoomFit">Fit</span></button>
+        </span>
+      </div>
+      <div class="wand-canvas-wrap checker">
+        <canvas id="wandCanvas"></canvas>
+      </div>
+      <div class="wand-controls">
+        <label class="slider">
+          <span data-i18n="wandTolerance">Tolerance:</span>
+          <input type="range" id="wandTol" min="0" max="100" value="20">
+          <output id="wandTolOut">20</output>
+        </label>
+        <label class="slider">
+          <span data-i18n="wandSize">Size:</span>
+          <input type="range" id="wandSize" min="1" max="200" value="20">
+          <output id="wandSizeOut">20</output>
+        </label>
+        <label class="check-inline">
+          <input type="checkbox" id="wandGlobal">
+          <span data-i18n="wandGlobal">All areas of this colour</span>
+        </label>
+      </div>
+      <p id="wandInfo" class="sim-state"></p>
+      <div class="wand-actions">
+        <button type="button" class="btn" id="wandRestore" data-i18n="wandRestore">Restore original</button>
+        <button type="button" class="btn" id="wandCancel" data-i18n="wandCancel">Cancel</button>
+        <button type="button" class="primary" id="wandApply" data-i18n="wandApply">Apply</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Tutorial dialog. #tutoContent is filled by renderTuto() from translations[lang].tutoBody. -->
+  <dialog id="tutoDialog" class="wand-dialog tuto-dialog">
+    <div class="wand-box tuto-body">
+      <h2 class="section-title" data-i18n="tutorials">Tutorials</h2>
+
+      <div id="tutoContent"></div>
+
+      <div class="wand-actions">
+        <button type="button" class="primary" id="tutoClose"><span data-i18n="close">Close</span></button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Loaded last so every element above exists when app.js runs. -->
+  <script src="app.js"></script>
+</body>
+</html>
