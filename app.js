@@ -63,10 +63,12 @@ const translations = {
     toolEraser: "Eraser",
     toolMagic: "Magic eraser",
     wandSize: "Size:",
+    wandGrow: "Expand background:",
     wandUndo: "Undo",
     zoomFit: "Fit",
     wandRedo: "Redo",
-    wandKeys: "Ctrl+Z undo · Ctrl+Shift+Z redo · Ctrl+wheel zoom",
+    wandKeys: "Ctrl+click add a zone · Ctrl+Z undo · Ctrl+Shift+Z redo · Ctrl+wheel zoom",
+    wandZones: "{n} zones selected",
     tutorials: "Tutorials",
     close: "Close",
     tutoBody: `
@@ -142,10 +144,12 @@ const translations = {
     toolEraser: "Gomme",
     toolMagic: "Gomme magique",
     wandSize: "Taille :",
+    wandGrow: "Élargir le fond :",
     wandUndo: "Défaire",
     zoomFit: "Ajuster",
     wandRedo: "Rétablir",
-    wandKeys: "Ctrl+Z annuler · Ctrl+Maj+Z rétablir · Ctrl+molette zoom",
+    wandKeys: "Ctrl+clic ajouter une zone · Ctrl+Z annuler · Ctrl+Maj+Z rétablir · Ctrl+molette zoom",
+    wandZones: "{n} zones sélectionnées",
     tutorials: "Tutoriels",
     close: "Fermer",
     tutoBody: `
@@ -220,10 +224,12 @@ const translations = {
     toolEraser: "消しゴム",
     toolMagic: "マジック消しゴム",
     wandSize: "サイズ:",
+    wandGrow: "背景を拡大:",
     wandUndo: "取り消し",
     zoomFit: "全体表示",
     wandRedo: "やり直し",
-    wandKeys: "Ctrl+Z 取り消し · Ctrl+Shift+Z やり直し · Ctrl+ホイール ズーム",
+    wandKeys: "Ctrl+クリックで領域を追加 · Ctrl+Z 取り消し · Ctrl+Shift+Z やり直し · Ctrl+ホイール ズーム",
+    wandZones: "{n} 箇所を選択中",
     tutorials: "チュートリアル",
     close: "閉じる",
     tutoBody: `
@@ -298,10 +304,12 @@ const translations = {
     toolEraser: "橡皮擦",
     toolMagic: "魔法橡皮擦",
     wandSize: "大小：",
+    wandGrow: "扩大背景：",
     wandUndo: "撤销",
     zoomFit: "适应窗口",
     wandRedo: "重做",
-    wandKeys: "Ctrl+Z 撤销 · Ctrl+Shift+Z 重做 · Ctrl+滚轮 缩放",
+    wandKeys: "Ctrl+点击添加区域 · Ctrl+Z 撤销 · Ctrl+Shift+Z 重做 · Ctrl+滚轮 缩放",
+    wandZones: "已选择 {n} 个区域",
     tutorials: "教程",
     close: "关闭",
     tutoBody: `
@@ -376,10 +384,12 @@ const translations = {
     toolEraser: "Silgi",
     toolMagic: "Sihirli silgi",
     wandSize: "Boyut:",
+    wandGrow: "Arka planı genişlet:",
     wandUndo: "Geri al",
     zoomFit: "Sığdır",
     wandRedo: "Yinele",
-    wandKeys: "Ctrl+Z geri al · Ctrl+Shift+Z yinele · Ctrl+tekerlek yakınlaştır",
+    wandKeys: "Ctrl+tık ile bölge ekle · Ctrl+Z geri al · Ctrl+Shift+Z yinele · Ctrl+tekerlek yakınlaştır",
+    wandZones: "{n} bölge seçildi",
     tutorials: "Eğitimler",
     close: "Kapat",
     tutoBody: `
@@ -994,6 +1004,8 @@ const wandInfo = document.getElementById('wandInfo');
 const wandRestoreBtn = document.getElementById('wandRestore');
 const wandSize = document.getElementById('wandSize');
 const wandSizeOut = document.getElementById('wandSizeOut');
+const wandGrow = document.getElementById('wandGrow');
+const wandGrowOut = document.getElementById('wandGrowOut');
 const wandUndoBtn = document.getElementById('wandUndo');
 const wandRedoBtn = document.getElementById('wandRedo');
 const wandZoomLabel = document.getElementById('wandZoomLabel');
@@ -1003,7 +1015,7 @@ const wandZoomLabel = document.getElementById('wandZoomLabel');
 const wand = {
   name: null, data: null, w: 0, h: 0,
   flood: null, manual: null, mask: null, removed: 0,
-  seed: null, animated: false,
+  seeds: [], animated: false, // seeds: pixel indices of the clicked points (Ctrl+click adds one)
   tool: 'flood', stroke: null, history: [], redo: [], zoom: 0 // zoom 0 = fit to window
 };
 const originals = {}; // name -> original File, for "Restore original"
@@ -1026,8 +1038,8 @@ function openWand(name) {
   const f = files[name];
   Object.assign(wand, {
     name, data: cx.getImageData(0, 0, w, h), w, h,
-    flood: null, manual: null, mask: null, removed: 0, seed: null,
-    history: [], redo: [], stroke: null,
+    flood: null, manual: null, mask: null, removed: 0, seeds: [],
+    history: [], redo: [], stroke: null, grow: 0,
     animated: !!f && (f.type === 'image/gif' || /\.(gif|apng)$/i.test(f.name))
   });
 
@@ -1040,6 +1052,8 @@ function openWand(name) {
   updateUndoButtons();
   wandSize.value = 20;
   wandSizeOut.textContent = wandSize.value;
+  wandGrow.value = 0;
+  wandGrowOut.textContent = '0';
   setTool('flood');
   renderWand();
   wandDialog.showModal();
@@ -1112,18 +1126,103 @@ function combinedMask() {
   return m;
 }
 
+// Edge softening: colour distance (RGB) over which a pixel next to the removed area
+// goes from fully transparent (background colour) to fully opaque (foreground).
+// Lower = sharper, higher = softer. 215 is about half the distance between white and black.
+const EDGE_RANGE = 215;
+// How many pixels around the removed area are checked for edge softening.
+const EDGE_RADIUS = 2;
+
 /**
- * Draws the editor canvas: original pixels with the combined mask set to alpha 0,
+ * Grows a mask by `steps` pixels (4-neighbour dilation).
+ * Used by the "Expand background" slider. Returns a new mask; the input is unchanged.
+ * @param {Uint8Array} mask
+ * @param {number} steps
+ * @returns {Uint8Array}
+ */
+function dilateMask(mask, steps) {
+  const { w, h } = wand;
+  let cur = mask;
+  for (let s = 0; s < steps; s++) {
+    const next = cur.slice();
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (cur[i]) continue;
+        if ((x > 0 && cur[i - 1]) || (x < w - 1 && cur[i + 1]) ||
+            (y > 0 && cur[i - w]) || (y < h - 1 && cur[i + w])) {
+          next[i] = 1;
+        }
+      }
+    }
+    cur = next;
+  }
+  return cur;
+}
+
+/**
+ * The mask that is actually removed: the wand/eraser union, grown by the
+ * "Expand background" slider. Returns null when nothing is selected.
+ */
+function finalMask() {
+  const m = combinedMask();
+  if (!m || wand.grow === 0) return m;
+  return dilateMask(m, wand.grow);
+}
+
+/**
+ * Builds the output pixels for a removal mask (used by the preview and by Apply).
+ * - Pixels inside the mask become fully transparent.
+ * - Pixels within EDGE_RADIUS of the mask become partly transparent, depending on how
+ *   close their colour is to the background colour. This removes the light
+ *   anti-aliased halo around outlines while keeping the dark outline itself.
+ * The background colour is the mean colour of the removed pixels.
+ * @param {Uint8Array|null} mask
+ * @returns {ImageData}
+ */
+function buildOutput(mask) {
+  const { w, h } = wand;
+  const src = wand.data.data;
+  const out = new ImageData(new Uint8ClampedArray(src), w, h);
+  const o = out.data;
+  if (!mask) return out;
+
+  let r = 0, g = 0, b = 0, count = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (mask[i]) {
+      r += src[i * 4]; g += src[i * 4 + 1]; b += src[i * 4 + 2];
+      count++;
+    }
+  }
+  if (count === 0) return out;
+  r /= count; g /= count; b /= count;
+
+  const near = dilateMask(mask, EDGE_RADIUS);
+  for (let i = 0; i < w * h; i++) {
+    if (mask[i]) { o[i * 4 + 3] = 0; continue; }
+    if (!near[i]) continue;
+    const dr = src[i * 4] - r;
+    const dg = src[i * 4 + 1] - g;
+    const db = src[i * 4 + 2] - b;
+    const d = Math.sqrt(dr * dr + dg * dg + db * db);
+    const f = Math.min(1, d / EDGE_RANGE);
+    o[i * 4 + 3] = Math.round(src[i * 4 + 3] * f);
+  }
+  return out;
+}
+
+/**
+ * Draws the editor canvas: the output from buildOutput() for the final mask,
  * then updates the "N px removed" info line.
  */
 function renderWand() {
   const { w, h } = wand;
-  const m = combinedMask();
-  const out = new ImageData(new Uint8ClampedArray(wand.data.data), w, h);
+  const m = finalMask();
+  const out = buildOutput(m);
   let removed = 0;
   if (m) {
     for (let i = 0; i < w * h; i++) {
-      if (m[i]) { out.data[i * 4 + 3] = 0; removed++; }
+      if (m[i]) removed++;
     }
   }
   wand.mask = m;
@@ -1133,14 +1232,31 @@ function renderWand() {
   const t = translations[currentLang];
   const parts = [];
   if (removed > 0) parts.push(t.wandInfo.replace('{n}', removed));
+  if (wand.seeds.length > 1) parts.push(t.wandZones.replace('{n}', wand.seeds.length));
   if (wand.animated) parts.push(t.wandAnimWarn);
   wandInfo.textContent = parts.join(' · ');
 }
 
+/**
+ * Recomputes the wand selection: the union of the flood fill of every seed point.
+ * Called when a point is clicked, and when the tolerance or "All areas" change.
+ */
 function refreshWandMask() {
-  if (wand.seed === null) return;
-  const r = computeMask(wand.seed, Number(wandTol.value), wandGlobal.checked);
-  wand.flood = r.mask;
+  if (!wand.seeds.length) {
+    wand.flood = null;
+    renderWand();
+    return;
+  }
+  const tol = Number(wandTol.value);
+  const global = wandGlobal.checked;
+  const union = new Uint8Array(wand.w * wand.h);
+  for (const seed of wand.seeds) {
+    const { mask } = computeMask(seed, tol, global);
+    for (let i = 0; i < union.length; i++) {
+      if (mask[i]) union[i] = 1;
+    }
+  }
+  wand.flood = union;
   renderWand();
 }
 
@@ -1148,14 +1264,14 @@ function snapshotWand() {
   return {
     flood: wand.flood ? wand.flood.slice() : null,
     manual: wand.manual ? wand.manual.slice() : null,
-    seed: wand.seed
+    seeds: wand.seeds.slice()
   };
 }
 
 function restoreWand(s) {
   wand.flood = s.flood;
   wand.manual = s.manual;
-  wand.seed = s.seed;
+  wand.seeds = s.seeds.slice();
   renderWand();
   updateUndoButtons();
 }
@@ -1274,6 +1390,13 @@ wandSize.addEventListener('input', () => {
   wandSizeOut.textContent = wandSize.value;
 });
 
+// "Expand background": grows the removed area by N pixels to eat the remaining halo.
+wandGrow.addEventListener('input', () => {
+  wandGrowOut.textContent = wandGrow.value;
+  wand.grow = Number(wandGrow.value);
+  renderWand();
+});
+
 document.querySelectorAll('.tool').forEach(b => {
   b.addEventListener('click', () => setTool(b.dataset.tool));
 });
@@ -1319,7 +1442,10 @@ wandCanvas.addEventListener('pointerdown', e => {
   if (wand.tool === 'flood') {
     if (p.x < 0 || p.y < 0 || p.x >= wand.w || p.y >= wand.h) return;
     pushHistory();
-    wand.seed = p.y * wand.w + p.x;
+    const seed = p.y * wand.w + p.x;
+    // Ctrl+click (Cmd+click on Mac) adds a zone; a plain click starts a new selection
+    if (e.ctrlKey || e.metaKey) wand.seeds.push(seed);
+    else wand.seeds = [seed];
     refreshWandMask();
     return;
   }
@@ -1358,15 +1484,13 @@ document.getElementById('wandCancel').addEventListener('click', () => wandDialog
 document.getElementById('wandApply').addEventListener('click', () => {
   const name = wand.name;
   if (!name) return;
-  const m = combinedMask();
+  const m = finalMask();
   if (!m || !m.some(v => v)) {
     wandDialog.close();
     return;
   }
-  const out = new ImageData(new Uint8ClampedArray(wand.data.data), wand.w, wand.h);
-  for (let i = 0; i < wand.w * wand.h; i++) {
-    if (m[i]) out.data[i * 4 + 3] = 0;
-  }
+  // Same output as the preview, so what you see is what gets saved
+  const out = buildOutput(m);
   const c = document.createElement('canvas');
   c.width = wand.w;
   c.height = wand.h;
