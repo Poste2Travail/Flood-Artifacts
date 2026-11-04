@@ -46,3 +46,28 @@ Everything runs in the browser. No images or data are sent to a server.
 - Inter and Orbitron fonts, loaded from Google Fonts.
 
 No build step, package manager or framework is required.
+
+## Development
+
+1. Clone the repository and open `index.html` in a browser, or run a local server:
+   ```
+   node server.js 8001
+   ```
+   then open `http://localhost:8001/index.html`. On Windows, `lancer-serveur.bat` does the same.
+2. Edit the files and reload the page. The local server sends `Cache-Control: no-store`, so reloads always show the latest code.
+3. There are no tests or linter. Check your changes by hand in the browser.
+
+### Architecture
+
+- `index.html` — markup only. Each block has an HTML comment describing its role.
+- `app.js` — all behaviour, organised in sections. The header comment explains the data model: slots are keyed by file name, and `files`, `images` and `slots` hold the state.
+- `style.css` — layout and theme. Colours are CSS custom properties on `:root`.
+
+### Adding a language
+
+1. Copy the `en` block in `translations` (in `app.js`) and translate every key.
+2. Add a `<button data-lang="xx" class="lang-btn">` in the `.lang-switcher` of `index.html`.
+
+### Changing the file names or settings
+
+The file names (`idle.png`, `talk_a.png`, …) and the `settings.ini` keys are read by Flood Tuber. Change them only if Flood Tuber changes too. Renaming a slot means updating three places: the `data-name` in `index.html`, the `order` array in `updatePreview()`, and the file name used in the ZIP.
