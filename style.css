@@ -642,9 +642,28 @@ select:focus {
   display: grid; /* with margin:auto on the canvas, zoomed content stays scrollable */
   max-height: 60vh;
   overflow: auto;
+  position: relative; /* positioning context for the brush preview circle */
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 12px;
+}
+
+/* Brush preview: translucent circle showing the area the eraser will clear.
+   Its size is set from JavaScript (updateBrushCursor) to match the brush size. */
+.brush-cursor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: rgba(0, 168, 255, 0.25);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Magic eraser uses a different colour so the two tools are easy to tell apart */
+.brush-cursor.is-magic {
+  background: rgba(255, 107, 107, 0.25);
 }
 
 .zoom-group {
