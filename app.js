@@ -1401,6 +1401,52 @@ document.querySelectorAll('.tool').forEach(b => {
   b.addEventListener('click', () => setTool(b.dataset.tool));
 });
 
+// ---------- Brush preview (Eraser / Magic eraser) ----------
+// A translucent circle follows the pointer and shows the area the brush will clear,
+// at the current Size (in image pixels, scaled to the zoom level on screen).
+const brushCursor = document.createElement('div');
+brushCursor.className = 'brush-cursor';
+brushCursor.hidden = true;
+wandCanvas.parentElement.appendChild(brushCursor);
+let brushPointer = null; // last pointer position over the canvas (client coordinates)
+
+/** Shows, moves or hides the brush circle depending on the tool and pointer position. */
+function updateBrushCursor() {
+  const isBrush = wand.tool === 'eraser' || wand.tool === 'magic';
+  if (!isBrush || !brushPointer || !wand.data) {
+    brushCursor.hidden = true;
+    return;
+  }
+  const cr = wandCanvas.getBoundingClientRect();
+  const inside = brushPointer.x >= cr.left && brushPointer.x <= cr.right &&
+                 brushPointer.y >= cr.top && brushPointer.y <= cr.bottom;
+  if (!inside) {
+    brushCursor.hidden = true;
+    return;
+  }
+  // Position relative to the scrollable wrapper, so it stays under the pointer when scrolled
+  const wrap = wandCanvas.parentElement;
+  const wr = wrap.getBoundingClientRect();
+  const diameter = 2 * Number(wandSize.value) * displayScale();
+  brushCursor.style.width = diameter + 'px';
+  brushCursor.style.height = diameter + 'px';
+  brushCursor.style.left = (brushPointer.x - wr.left + wrap.scrollLeft) + 'px';
+  brushCursor.style.top = (brushPointer.y - wr.top + wrap.scrollTop) + 'px';
+  brushCursor.classList.toggle('is-magic', wand.tool === 'magic');
+  brushCursor.hidden = false;
+}
+
+wandCanvas.addEventListener('pointermove', e => {
+  brushPointer = { x: e.clientX, y: e.clientY };
+  updateBrushCursor();
+});
+wandCanvas.addEventListener('pointerleave', () => {
+  brushPointer = null;
+  brushCursor.hidden = true;
+});
+wandSize.addEventListener('input', updateBrushCursor);
+document.querySelectorAll('.tool').forEach(b => b.addEventListener('click', updateBrushCursor));
+
 document.getElementById('wandUndo').addEventListener('click', undoWand);
 document.getElementById('wandRedo').addEventListener('click', redoWand);
 
