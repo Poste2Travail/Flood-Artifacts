@@ -1,0 +1,724 @@
+/* Flood Tuber Package Builder — dark theme (tokens taken from the Grok prototype) */
+
+:root {
+  --bg: #050508;
+  --stage: #0a0a10;
+  --surface: #0f0f18;
+  --surface-2: #16162a;
+  --fg: #f0f0f5;
+  --muted: #9a9ab0;
+  --faint: #6a6a82;
+  --primary: #00a8ff;
+  --primary-ink: #041018;
+  --line: #2a2a3d;
+  --ok: #3dd68c;
+  --bad: #ff6b6b;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Orbitron", ui-sans-serif, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button:not(:disabled),
+[role="button"] {
+  cursor: pointer;
+}
+
+/* ---------- Layout ---------- */
+
+.wrap {
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.logo {
+  height: 64px;
+  width: auto;
+  animation: pulse-glow 3.2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    filter: drop-shadow(rgba(0, 168, 255, 0.35) 0 0 10px);
+  }
+  50% {
+    filter: drop-shadow(rgba(0, 168, 255, 0.7) 0 0 18px);
+  }
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--primary);
+}
+
+h1 {
+  margin: 8px 0 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.subtitle {
+  max-width: 40rem;
+  margin: 12px auto 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.section-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  color: var(--primary);
+}
+
+/* ---------- Form fields ---------- */
+
+.lang-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.lang-btn,
+.btn,
+.primary {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 14px;
+  transition: border-color 150ms, background-color 150ms, transform 150ms;
+}
+
+.lang-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+  font-weight: 600;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn:hover,
+.lang-btn:hover {
+  border-color: var(--primary);
+}
+
+.btn[aria-pressed="true"] {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn:active,
+.primary:active {
+  transform: scale(0.96);
+}
+
+.name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 26rem;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+input[type="text"],
+input[type="number"],
+select {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--fg);
+  outline: none;
+  width: 100%;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus {
+  border-color: var(--primary);
+}
+
+/* ---------- Slots ---------- */
+
+.slots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 40rem) {
+  .slots {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 176px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition: border-color 150ms;
+}
+
+.slot:hover,
+.slot:focus-visible {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.slot.filled {
+  border-color: rgba(0, 168, 255, 0.45);
+}
+
+.slot-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.badge {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--primary);
+}
+
+.dropzone {
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.dropzone img {
+  max-width: 100%;
+  max-height: 140px;
+  object-fit: contain;
+}
+
+.dropzone.dragover {
+  outline: 2px dashed var(--primary);
+  outline-offset: -4px;
+}
+
+.hint {
+  padding: 0 8px;
+  color: var(--faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.checker {
+  background-color: var(--stage);
+  background-image:
+    linear-gradient(45deg, rgb(22, 22, 34) 25%, transparent 25%),
+    linear-gradient(-45deg, rgb(22, 22, 34) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgb(22, 22, 34) 75%),
+    linear-gradient(-45deg, transparent 75%, rgb(22, 22, 34) 75%);
+  background-size: 28px 28px;
+  background-position: 0 0, 0 14px, 14px -14px, -14px 0;
+}
+
+/* ---------- Preview ---------- */
+
+.preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.preview-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.slider input {
+  width: 7rem;
+  accent-color: var(--primary);
+}
+
+.layer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.layer-controls:empty {
+  display: none;
+}
+
+.layer-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.viewer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  max-height: 28rem;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.stack {
+  position: relative;
+  max-width: 100%;
+}
+
+.stack img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* ---------- Settings ---------- */
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 40rem) {
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .settings-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.settings-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.settings-grid label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  align-self: end;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--fg);
+  background: var(--surface);
+}
+
+.settings-grid input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+/* ---------- Actions ---------- */
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 24px;
+  text-align: center;
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--primary);
+  color: var(--primary-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.loader {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--line);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#status {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+#status.is-busy {
+  color: var(--primary);
+}
+
+#status.is-ok {
+  color: var(--ok);
+}
+
+#status.is-bad {
+  color: var(--bad);
+}
+
+.credits {
+  margin: 0;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.credits a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* ---------- Baguette magique ---------- */
+
+.wand {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--primary);
+  transition: border-color 150ms;
+}
+
+.wand:hover,
+.wand:focus-visible {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.wand-dialog {
+  width: min(92vw, 56rem);
+  max-width: 92vw;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--fg);
+}
+
+.wand-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.wand-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.wand-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.tuto-btn {
+  margin-top: 8px;
+}
+
+.tuto-body {
+  max-height: 85vh;
+  overflow-y: auto;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.tuto-body h3 {
+  margin: 12px 0 0;
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.025em;
+  color: var(--primary);
+}
+
+.tuto-body p,
+.tuto-body li {
+  margin: 0;
+  color: var(--muted);
+}
+
+.tuto-body ol {
+  margin: 0;
+  padding-left: 1.4em;
+  color: var(--muted);
+}
+
+.tuto-body ol li + li {
+  margin-top: 4px;
+}
+
+.tuto-body code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--fg);
+}
+
+.tuto-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.tuto-links a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.wand-keys {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.wand-canvas-wrap {
+  display: grid; /* avec margin:auto sur le canvas, le zoom reste défilable */
+  max-height: 60vh;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.zoom-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zoom-label {
+  min-width: 4.5em;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+#wandCanvas.zoomed {
+  max-width: none;
+  max-height: none;
+}
+
+#wandCanvas {
+  margin: auto;
+  display: block;
+  max-width: 100%;
+  max-height: 56vh;
+  width: auto;
+  height: auto;
+  cursor: crosshair;
+  image-rendering: pixelated;
+}
+
+.wand-controls,
+.wand-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wand-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#wandCanvas {
+  touch-action: none; /* permet le dessin au doigt sans défiler */
+}
+
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.check-inline input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.wand-dialog output {
+  min-width: 2ch;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.sim-state {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo,
+  .loader {
+    animation: none;
+  }
+}
