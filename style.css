@@ -362,10 +362,7 @@ select:focus {
 .viewer {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  max-height: 28rem;
+  height: clamp(240px, 55vh, 32rem); /* fixed height: applyPreviewZoom() fits the stack to it */
   overflow: auto;
   padding: 16px;
   border: 1px solid var(--line);
@@ -374,7 +371,8 @@ select:focus {
 
 .stack {
   position: relative;
-  max-width: 100%;
+  flex-shrink: 0;
+  margin: auto; /* centred when it fits, scrollable (not clipped) when zoomed in */
 }
 
 .stack img {
@@ -542,6 +540,16 @@ select:focus {
 .wand:focus-visible {
   border-color: var(--primary);
   outline: none;
+}
+
+/* Red cross that empties a slot */
+.wand.remove {
+  color: var(--bad);
+}
+
+.wand.remove:hover,
+.wand.remove:focus-visible {
+  border-color: var(--bad);
 }
 
 .sr {
