@@ -111,6 +111,12 @@
           </label>
           <button id="simulate" class="btn" aria-pressed="false"><span data-i18n="simulate">Simulate pattern</span></button>
           <button id="diffMode" class="btn" aria-pressed="false"><span data-i18n="diffMode">Difference</span></button>
+          <span class="zoom-group" role="group" aria-label="Preview zoom">
+            <button type="button" class="btn" id="previewZoomOut" aria-label="Zoom out" title="Zoom out (−)">−</button>
+            <output id="previewZoomLabel" class="zoom-label">100 %</output>
+            <button type="button" class="btn" id="previewZoomIn" aria-label="Zoom in" title="Zoom in (+)">+</button>
+            <button type="button" class="btn" id="previewZoomFit" title="Fit to preview (0)"><span data-i18n="zoomFit">Fit</span></button>
+          </span>
           <button id="toggleAll" class="btn">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path><path d="m2 2 20 20"></path></svg>
             <span data-i18n="toggleAll">Show / Hide all</span>
@@ -119,7 +125,7 @@
       </div>
       <div class="layer-controls" id="layerControls"></div>
       <p id="simState" class="sim-state" hidden></p>
-      <div class="viewer checker" id="viewer">
+      <div class="viewer checker" id="previewViewer">
         <div class="stack" id="stack"></div>
         <p class="empty" id="stackEmpty" data-i18n="stackEmpty">Add idle.png to see the stack.</p>
       </div>
