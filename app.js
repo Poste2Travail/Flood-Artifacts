@@ -28,6 +28,7 @@ const translations = {
     title: "Flood Tuber Package Builder",
     subtitle: "Drop PNG, GIF, APNG or WebP into the slots, check the overlay, then download a ZIP with settings.ini.",
     avatarName: "Avatar name (folder):",
+    authorName: "Author:",
     slotsTitle: "Sprite slots",
     required: "required",
     clickOrDrop: "Click or drop",
@@ -68,6 +69,9 @@ const translations = {
     wandGrow: "Expand background:",
     wandUndo: "Undo",
     zoomFit: "Fit",
+    bgLabel: "Background:",
+    bgImage: "Image",
+    bgReset: "Reset",
     wandRedo: "Redo",
     wandKeys: "Ctrl+click add a zone · Ctrl+Z undo · Ctrl+Shift+Z redo · Ctrl+wheel zoom",
     wandZones: "{n} zones selected",
@@ -111,6 +115,7 @@ const translations = {
     title: "Flood Tuber Package Builder",
     subtitle: "Glissez vos images (PNG / GIF / APNG / WebP) dans les slots, vérifiez l’alignement, générez le settings.ini et téléchargez le package ZIP.",
     avatarName: "Nom de l’avatar (dossier) :",
+    authorName: "Auteur :",
     slotsTitle: "Emplacements des sprites",
     required: "requis",
     clickOrDrop: "Cliquez ou déposez",
@@ -151,6 +156,9 @@ const translations = {
     wandGrow: "Élargir le fond :",
     wandUndo: "Défaire",
     zoomFit: "Ajuster",
+    bgLabel: "Fond :",
+    bgImage: "Image",
+    bgReset: "Réinitialiser",
     wandRedo: "Rétablir",
     wandKeys: "Ctrl+clic ajouter une zone · Ctrl+Z annuler · Ctrl+Maj+Z rétablir · Ctrl+molette zoom",
     wandZones: "{n} zones sélectionnées",
@@ -193,6 +201,7 @@ const translations = {
     title: "Flood Tuber パッケージビルダー",
     subtitle: "画像（PNG / GIF / APNG / WebP）をスロットにドラッグ＆ドロップし、位置合わせを確認して settings.ini を生成し、ZIPパッケージをダウンロードします。",
     avatarName: "アバター名（フォルダ）:",
+    authorName: "作者:",
     slotsTitle: "スプライトスロット",
     required: "必須",
     clickOrDrop: "クリックまたはドロップ",
@@ -233,6 +242,9 @@ const translations = {
     wandGrow: "背景を拡大:",
     wandUndo: "取り消し",
     zoomFit: "全体表示",
+    bgLabel: "背景:",
+    bgImage: "画像",
+    bgReset: "リセット",
     wandRedo: "やり直し",
     wandKeys: "Ctrl+クリックで領域を追加 · Ctrl+Z 取り消し · Ctrl+Shift+Z やり直し · Ctrl+ホイール ズーム",
     wandZones: "{n} 箇所を選択中",
@@ -275,6 +287,7 @@ const translations = {
     title: "Flood Tuber 包构建器",
     subtitle: "将图像（PNG / GIF / APNG / WebP）拖放到插槽中，检查对齐，生成 settings.ini 并下载 ZIP 包。",
     avatarName: "头像名称（文件夹）：",
+    authorName: "作者：",
     slotsTitle: "精灵插槽",
     required: "必需",
     clickOrDrop: "点击或拖放",
@@ -315,6 +328,9 @@ const translations = {
     wandGrow: "扩大背景：",
     wandUndo: "撤销",
     zoomFit: "适应窗口",
+    bgLabel: "背景：",
+    bgImage: "图片",
+    bgReset: "重置",
     wandRedo: "重做",
     wandKeys: "Ctrl+点击添加区域 · Ctrl+Z 撤销 · Ctrl+Shift+Z 重做 · Ctrl+滚轮 缩放",
     wandZones: "已选择 {n} 个区域",
@@ -357,6 +373,7 @@ const translations = {
     title: "Flood Tuber Paket Oluşturucu",
     subtitle: "Görsellerinizi (PNG / GIF / APNG / WebP) yuvalara sürükleyip bırakın, hizalamayı kontrol edin, settings.ini oluşturun ve ZIP paketini indirin.",
     avatarName: "Avatar adı (klasör):",
+    authorName: "Yazar:",
     slotsTitle: "Sprite yuvaları",
     required: "zorunlu",
     clickOrDrop: "Tıklayın veya sürükleyin",
@@ -397,6 +414,9 @@ const translations = {
     wandGrow: "Arka planı genişlet:",
     wandUndo: "Geri al",
     zoomFit: "Sığdır",
+    bgLabel: "Arka plan:",
+    bgImage: "Resim",
+    bgReset: "Sıfırla",
     wandRedo: "Yinele",
     wandKeys: "Ctrl+tık ile bölge ekle · Ctrl+Z geri al · Ctrl+Shift+Z yinele · Ctrl+tekerlek yakınlaştır",
     wandZones: "{n} bölge seçildi",
@@ -696,6 +716,39 @@ document.addEventListener('keydown', e => {
   else if (e.key === '0') { e.preventDefault(); fitPreview(); }
 });
 
+// ---------- Preview background (to check missing pixels) ----------
+// Painted on the stack, so it sits exactly behind the sprite: any transparent pixel that
+// should have been filled shows up against it. Colour and image can be combined.
+const previewBgColor = document.getElementById('previewBgColor');
+const previewBgFile = document.getElementById('previewBgFile');
+let previewBgUrl = null;
+
+previewBgColor.addEventListener('input', () => {
+  stack.style.backgroundColor = previewBgColor.value;
+});
+document.getElementById('previewBgImage').addEventListener('click', () => previewBgFile.click());
+previewBgFile.addEventListener('change', () => {
+  const file = previewBgFile.files[0];
+  if (!file) return;
+  if (previewBgUrl) URL.revokeObjectURL(previewBgUrl);
+  previewBgUrl = URL.createObjectURL(file);
+  stack.style.backgroundImage = `url("${previewBgUrl}")`;
+  stack.style.backgroundSize = 'cover';
+  stack.style.backgroundPosition = 'center';
+  previewBgFile.value = ''; // so the same file can be picked again
+});
+document.getElementById('previewBgReset').addEventListener('click', () => {
+  stack.style.backgroundColor = '';
+  stack.style.backgroundImage = '';
+  stack.style.backgroundSize = '';
+  stack.style.backgroundPosition = '';
+  previewBgColor.value = '#ffffff';
+  if (previewBgUrl) {
+    URL.revokeObjectURL(previewBgUrl);
+    previewBgUrl = null;
+  }
+});
+
 /**
  * Rebuilds the preview stack and the per-layer checkboxes from `images`.
  * Layers are stacked in the fixed `order` below (idle at the bottom). The first
@@ -725,14 +778,13 @@ function updatePreview() {
     layerImg.style.zIndex = z++;
     layerImg.dataset.name = name;
     layerImg.style.opacity = document.getElementById('globalOpacity').value / 100;
-    // The base layer is never blended; the others use difference when enabled
-    layerImg.style.mixBlendMode = (diffMode && stack.children.length > 0) ? 'difference' : 'normal';
     stack.appendChild(layerImg);
 
     const label = document.createElement('label');
     label.innerHTML = `<input type="checkbox" checked data-name="${name}"> ${name}`;
     label.querySelector('input').addEventListener('change', e => {
       layerImg.style.display = e.target.checked ? 'block' : 'none';
+      renderDiff();
     });
     layerControls.appendChild(label);
   });
@@ -749,6 +801,7 @@ function updatePreview() {
     preview.nh = 0;
   }
   applyPreviewZoom();
+  renderDiff();
 }
 
 document.getElementById('globalOpacity').addEventListener('input', e => {
@@ -757,12 +810,105 @@ document.getElementById('globalOpacity').addEventListener('input', e => {
   });
 });
 
+// ---------- Difference view ----------
+// The reference is always idle.png, even when its checkbox is off. The other visible layers
+// are composited in stacking order (as in the preview). Each pixel where that composite
+// differs from idle is painted in a strong colour; the unchanged idle is shown faintly.
+const DIFF_TOLERANCE = 40;          // largest channel difference (0-255) still counted as equal
+const DIFF_COLOR = [255, 40, 140];  // colour of the differing pixels
+const diffStat = document.getElementById('diffStat');
+
+// Pixels of `img` drawn into a W x H box the way object-fit: contain does in the preview
+function layerPixels(img, W, H) {
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  const s = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+  const w = img.naturalWidth * s;
+  const h = img.naturalHeight * s;
+  ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+  return ctx.getImageData(0, 0, W, H).data;
+}
+
+// Rebuilds the difference canvas over the stack (no-op when the mode is off)
+function renderDiff() {
+  stack.querySelectorAll('canvas.diff-canvas').forEach(c => c.remove());
+  stack.classList.toggle('diff-on', diffMode);
+  diffStat.textContent = '';
+  if (!diffMode || !images['idle.png']) return;
+
+  const ref = images['idle.png'].img;
+  const W = ref.naturalWidth;
+  const H = ref.naturalHeight;
+  const idle = layerPixels(ref, W, H);
+
+  // Composite the visible layers bottom to top ("over", straight colour, alpha 0..1)
+  const comp = new Float32Array(W * H * 4);
+  stack.querySelectorAll('img').forEach(img => {
+    const box = document.querySelector(`#layerControls input[data-name="${img.dataset.name}"]`);
+    if (box && !box.checked) return;
+    const px = layerPixels(img, W, H);
+    for (let i = 0; i < px.length; i += 4) {
+      const sa = px[i + 3] / 255;
+      if (sa === 0) continue;
+      const da = comp[i + 3];
+      const oa = sa + da * (1 - sa);
+      for (let k = 0; k < 3; k++) {
+        comp[i + k] = (px[i + k] * sa + comp[i + k] * da * (1 - sa)) / oa;
+      }
+      comp[i + 3] = oa;
+    }
+  });
+
+  const out = new ImageData(W, H);
+  const o = out.data;
+  let diff = 0;
+  for (let i = 0; i < o.length; i += 4) {
+    const ia = idle[i + 3];      // reference alpha, 0..255
+    const ca = comp[i + 3] * 255; // composite alpha, 0..255
+    if (ia < 8 && ca < 8) continue; // empty on both sides: stays transparent
+
+    let d;
+    if (ia >= 8 && ca >= 8) {
+      d = Math.max(
+        Math.abs(ca - ia),
+        Math.abs(comp[i] - idle[i]),
+        Math.abs(comp[i + 1] - idle[i + 1]),
+        Math.abs(comp[i + 2] - idle[i + 2])
+      );
+    } else {
+      d = 255; // only one side has a pixel here
+    }
+
+    if (d > DIFF_TOLERANCE) {
+      o[i] = DIFF_COLOR[0];
+      o[i + 1] = DIFF_COLOR[1];
+      o[i + 2] = DIFF_COLOR[2];
+      o[i + 3] = 255;
+      diff++;
+    } else {
+      const grey = idle[i] * 0.3 + idle[i + 1] * 0.59 + idle[i + 2] * 0.11;
+      o[i] = o[i + 1] = o[i + 2] = grey;
+      o[i + 3] = 70;
+    }
+  }
+
+  const c = document.createElement('canvas');
+  c.className = 'diff-canvas';
+  c.width = W;
+  c.height = H;
+  c.getContext('2d').putImageData(out, 0, 0);
+  stack.appendChild(c);
+
+  diffStat.textContent = `Δ ${(100 * diff / (W * H)).toFixed(1)} %`;
+  diffStat.title = 'Share of pixels that differ from idle.png';
+}
+
 document.getElementById('diffMode').addEventListener('click', () => {
   diffMode = !diffMode;
-  document.querySelectorAll('#stack img').forEach((img, i) => {
-    img.style.mixBlendMode = (diffMode && i > 0) ? 'difference' : 'normal';
-  });
   updateDiffLabel();
+  renderDiff();
 });
 
 document.getElementById('toggleAll').addEventListener('click', () => {
@@ -778,26 +924,42 @@ document.getElementById('toggleAll').addEventListener('click', () => {
  * Serialises the settings form into the text of settings.ini.
  * The keys are read by Flood Tuber. Add a key here and in index.html only if
  * Flood Tuber supports it. Values are copied as typed (no validation).
- * @returns {string} the [Settings] section
+ * Sections follow the sample packages: [General] (name = avatar name, author), [Audio],
+ * [Mouth], [Blink], [Action], [Motion]. Values are copied as typed (no validation).
+ * @returns {string} the text of settings.ini
  */
 function generateSettingsIni() {
   const get = id => document.getElementById(id).value;
   const mirror = document.getElementById('mirror').checked ? '1' : '0';
-  return `[Settings]
-threshold=${get('threshold')}
-release_delay=${get('release_delay')}
-talking_speed=${get('talking_speed')}
-blink_duration=${get('blink_duration')}
-blink_interval_min=${get('blink_interval_min')}
-blink_interval_max=${get('blink_interval_max')}
-action_duration=${get('action_duration')}
-action_interval_min=${get('action_interval_min')}
-action_interval_max=${get('action_interval_max')}
-motion_type=${get('motion_type')}
-motion_speed=${get('motion_speed')}
-motion_strength=${get('motion_strength')}
+  const name = document.getElementById('avatarName').value.trim() || 'My Avatar';
+  const author = get('author').trim();
+  return `[General]
+name=${name}
+author=${author}
 mirror=${mirror}
 reference_height=${get('reference_height')}
+
+[Audio]
+threshold=${get('threshold')}
+release_delay=${get('release_delay')}
+
+[Mouth]
+talking_speed=${get('talking_speed')}
+
+[Blink]
+duration=${get('blink_duration')}
+interval_min=${get('blink_interval_min')}
+interval_max=${get('blink_interval_max')}
+
+[Action]
+duration=${get('action_duration')}
+interval_min=${get('action_interval_min')}
+interval_max=${get('action_interval_max')}
+
+[Motion]
+type=${get('motion_type')}
+speed=${get('motion_speed')}
+strength=${get('motion_strength')}
 `;
 }
 
@@ -1524,16 +1686,17 @@ function updateBrushCursor() {
     brushCursor.hidden = true;
     return;
   }
-  const cr = wandCanvas.getBoundingClientRect();
-  const inside = brushPointer.x >= cr.left && brushPointer.x <= cr.right &&
-                 brushPointer.y >= cr.top && brushPointer.y <= cr.bottom;
+  // Tied to the editor's wrapper, not to the canvas edge: the circle stays visible over the
+  // padding and while a stroke continues past the canvas (the pointer is captured then).
+  const wrap = wandCanvas.parentElement;
+  const wr = wrap.getBoundingClientRect();
+  const inside = brushPointer.x >= wr.left && brushPointer.x <= wr.right &&
+                 brushPointer.y >= wr.top && brushPointer.y <= wr.bottom;
   if (!inside) {
     brushCursor.hidden = true;
     return;
   }
   // Position relative to the scrollable wrapper, so it stays under the pointer when scrolled
-  const wrap = wandCanvas.parentElement;
-  const wr = wrap.getBoundingClientRect();
   const diameter = 2 * Number(wandSize.value) * displayScale();
   brushCursor.style.width = diameter + 'px';
   brushCursor.style.height = diameter + 'px';
@@ -1543,11 +1706,14 @@ function updateBrushCursor() {
   brushCursor.hidden = false;
 }
 
-wandCanvas.addEventListener('pointermove', e => {
+// Listening on the wrapper: moves over the canvas bubble up here, and so do moves made
+// while a stroke has captured the pointer.
+const brushWrap = wandCanvas.parentElement;
+brushWrap.addEventListener('pointermove', e => {
   brushPointer = { x: e.clientX, y: e.clientY };
   updateBrushCursor();
 });
-wandCanvas.addEventListener('pointerleave', () => {
+brushWrap.addEventListener('pointerleave', () => {
   brushPointer = null;
   brushCursor.hidden = true;
 });
