@@ -384,6 +384,19 @@ select:focus {
   pointer-events: none;
 }
 
+/* Difference view: the layers are replaced by the highlight canvas (see renderDiff in app.js) */
+.stack.diff-on > img {
+  visibility: hidden !important;
+}
+
+.stack canvas.diff-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .empty {
   position: absolute;
   inset: 0;
@@ -415,6 +428,38 @@ select:focus {
   .settings-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+/* One box per [section] of settings.ini */
+.ini-sections {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 40rem) {
+  .ini-sections {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.ini-group {
+  min-width: 0;
+  margin: 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.ini-group legend {
+  padding: 0 6px;
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.ini-group .settings-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .settings-grid label {
@@ -672,6 +717,16 @@ select:focus {
 /* Magic eraser uses a different colour so the two tools are easy to tell apart */
 .brush-cursor.is-magic {
   background: rgba(255, 107, 107, 0.25);
+}
+
+#previewBgColor {
+  width: 36px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  cursor: pointer;
 }
 
 .zoom-group {
