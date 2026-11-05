@@ -48,6 +48,8 @@ const translations = {
     simAction: "ACTION",
     simBlink: "blink",
     wandBtn: "Magic wand: remove background",
+    removeBtn: "Remove this sprite",
+    removeDone: "Sprite removed.",
     wandTitle: "Magic wand",
     wandHint: "Click on the background to make it transparent. Adjust the tolerance if needed.",
     wandTolerance: "Tolerance:",
@@ -129,6 +131,8 @@ const translations = {
     simAction: "ACTION",
     simBlink: "clignement",
     wandBtn: "Baguette magique : effacer le fond",
+    removeBtn: "Retirer ce sprite",
+    removeDone: "Sprite retiré.",
     wandTitle: "Baguette magique",
     wandHint: "Cliquez sur le fond pour le rendre transparent. Ajustez la tolérance si besoin.",
     wandTolerance: "Tolérance :",
@@ -209,6 +213,8 @@ const translations = {
     simAction: "アクション",
     simBlink: "まばたき",
     wandBtn: "マジックワンド：背景を削除",
+    removeBtn: "このスプライトを削除",
+    removeDone: "スプライトを削除しました。",
     wandTitle: "マジックワンド",
     wandHint: "背景をクリックして透明にします。必要に応じて許容値を調整してください。",
     wandTolerance: "許容値:",
@@ -289,6 +295,8 @@ const translations = {
     simAction: "动作",
     simBlink: "眨眼",
     wandBtn: "魔棒：去除背景",
+    removeBtn: "移除此精灵",
+    removeDone: "精灵已移除。",
     wandTitle: "魔棒",
     wandHint: "点击背景使其透明。如有需要请调整容差。",
     wandTolerance: "容差：",
@@ -369,6 +377,8 @@ const translations = {
     simAction: "AKSİYON",
     simBlink: "göz kırpma",
     wandBtn: "Sihirli değnek: arka planı sil",
+    removeBtn: "Bu sprite'ı kaldır",
+    removeDone: "Sprite kaldırıldı.",
     wandTitle: "Sihirli değnek",
     wandHint: "Arka planı şeffaf yapmak için üzerine tıklayın. Gerekirse toleransı ayarlayın.",
     wandTolerance: "Tolerans:",
@@ -521,7 +531,7 @@ slotElements.forEach(slot => {
   const dropzone = slot.querySelector('.dropzone');
   const input = slot.querySelector('input[type="file"]');
 
-  slots[name] = { dropzone, input, slot, wandBtn: null };
+  slots[name] = { dropzone, input, slot, wandBtn: null, removeBtn: null };
 
   // Magic wand button in the slot header (visible once an image is loaded)
   const wandBtn = document.createElement('button');
@@ -535,6 +545,19 @@ slotElements.forEach(slot => {
   });
   slot.querySelector('.slot-head').appendChild(wandBtn);
   slots[name].wandBtn = wandBtn;
+
+  // Red cross: empties the slot (the sprite leaves the preview and the ZIP)
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'wand remove';
+  removeBtn.hidden = true;
+  removeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg><span class="sr" data-i18n="removeBtn">Remove this sprite</span>`;
+  removeBtn.addEventListener('click', e => {
+    e.stopPropagation(); // don't open the slot's file picker
+    clearSlot(name);
+  });
+  slot.querySelector('.slot-head').appendChild(removeBtn);
+  slots[name].removeBtn = removeBtn;
 
   // Click anywhere on the slot opens the file dialog
   slot.addEventListener('click', (e) => {
@@ -589,9 +612,89 @@ function loadFile(name, file) {
     dropzone.innerHTML = `<img src="${url}" alt="${name}">`;
     slot.classList.add('filled');
     slots[name].wandBtn.hidden = false;
+    slots[name].removeBtn.hidden = false;
     updatePreview();
   };
 }
+
+/**
+ * Empties a slot: drops its sprite from `files`, `images` and `originals`, resets the
+ * thumbnail and refreshes the preview. Called by the red cross in the slot header.
+ * @param {string} name  slot file name, e.g. "talk_a.png"
+ */
+function clearSlot(name) {
+  if (images[name]) URL.revokeObjectURL(images[name].url);
+  delete images[name];
+  delete files[name];
+  delete originals[name];
+  const { dropzone, slot, input, wandBtn, removeBtn } = slots[name];
+  dropzone.innerHTML = `<span class="hint" data-i18n="clickOrDrop">${translations[currentLang].clickOrDrop}</span>`;
+  slot.classList.remove('filled');
+  wandBtn.hidden = true;
+  removeBtn.hidden = true;
+  input.value = ''; // so picking the same file again still fires "change"
+  dirty = true;
+  updatePreview();
+  setStatus(translations[currentLang].removeDone, 'ok');
+}
+
+// ---------- Preview zoom ----------
+// preview.zoom = 0 fits the whole stack in the viewer; any other value is the on-screen
+// scale (1 = real image size). preview.scale is the scale actually displayed.
+const preview = { zoom: 0, scale: 1, nw: 0, nh: 0 };
+const previewViewer = document.getElementById('previewViewer');
+const previewZoomLabel = document.getElementById('previewZoomLabel');
+const PREVIEW_PAD = 16; // must match the .viewer padding in style.css
+
+// Sizes the stack from the base layer's natural size and the viewer's current size
+function applyPreviewZoom() {
+  if (!preview.nw) {
+    stack.style.width = '';
+    stack.style.height = '';
+    preview.scale = 1;
+    previewZoomLabel.textContent = '100 %';
+    return;
+  }
+  const fit = Math.min(
+    (previewViewer.clientWidth - 2 * PREVIEW_PAD) / preview.nw,
+    (previewViewer.clientHeight - 2 * PREVIEW_PAD) / preview.nh
+  );
+  preview.scale = preview.zoom || Math.max(0.05, fit);
+  stack.style.width = Math.round(preview.nw * preview.scale) + 'px';
+  stack.style.height = Math.round(preview.nh * preview.scale) + 'px';
+  previewZoomLabel.textContent = Math.round(preview.scale * 100) + ' %';
+}
+
+function zoomPreview(factor) {
+  preview.zoom = Math.min(8, Math.max(0.05, preview.scale * factor));
+  applyPreviewZoom();
+}
+
+function fitPreview() {
+  preview.zoom = 0;
+  applyPreviewZoom();
+}
+
+document.getElementById('previewZoomIn').addEventListener('click', () => zoomPreview(1.25));
+document.getElementById('previewZoomOut').addEventListener('click', () => zoomPreview(1 / 1.25));
+document.getElementById('previewZoomFit').addEventListener('click', fitPreview);
+window.addEventListener('resize', applyPreviewZoom);
+
+// Ctrl + wheel over the preview zooms it (the page itself does not zoom)
+previewViewer.addEventListener('wheel', e => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  zoomPreview(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+}, { passive: false });
+
+// Keys + / - / 0 zoom the preview, unless the editor is open or a field has focus
+document.addEventListener('keydown', e => {
+  if (wandDialog.open || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomPreview(1.25); }
+  else if (e.key === '-') { e.preventDefault(); zoomPreview(1 / 1.25); }
+  else if (e.key === '0') { e.preventDefault(); fitPreview(); }
+});
 
 /**
  * Rebuilds the preview stack and the per-layer checkboxes from `images`.
@@ -636,12 +739,16 @@ function updatePreview() {
 
   stackEmpty.hidden = stack.children.length > 0;
 
-  // Size the stack to the first (base) layer
+  // Size the stack from the first (base) layer, then fit or zoom it to the viewer
   if (firstName) {
     const { img } = images[firstName];
-    stack.style.width = img.naturalWidth + 'px';
-    stack.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+    preview.nw = img.naturalWidth;
+    preview.nh = img.naturalHeight;
+  } else {
+    preview.nw = 0;
+    preview.nh = 0;
   }
+  applyPreviewZoom();
 }
 
 document.getElementById('globalOpacity').addEventListener('input', e => {
