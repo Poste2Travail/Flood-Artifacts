@@ -610,6 +610,8 @@ select:focus {
 .wand-dialog {
   width: min(92vw, 56rem);
   max-width: 92vw;
+  max-height: 92vh;
+  overflow: auto;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -689,6 +691,8 @@ select:focus {
 
 .wand-keys {
   font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: break-word;
   color: var(--faint);
 }
 
