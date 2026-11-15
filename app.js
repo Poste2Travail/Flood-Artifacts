@@ -80,7 +80,7 @@ const translations = {
     bgImage: "Image",
     bgReset: "Reset",
     wandRedo: "Redo",
-    wandKeys: "Ctrl+click add a zone · Ctrl+Z undo · Ctrl+Shift+Z redo · Ctrl+wheel zoom",
+    wandKeys: "Click adds. Click again or right-click removes. Shift+click stacks. Delete removes the last. Wand clears all.",
     wandZones: "{n} zones selected",
     tutorials: "Tutorials",
     close: "Close",
@@ -185,7 +185,7 @@ const translations = {
     bgImage: "Image",
     bgReset: "Réinitialiser",
     wandRedo: "Rétablir",
-    wandKeys: "Ctrl+clic ajouter une zone · Ctrl+Z annuler · Ctrl+Maj+Z rétablir · Ctrl+molette zoom",
+    wandKeys: "Clic ajoute. Reclic ou clic droit retire. Maj+clic superpose. Suppr retire la dernière. Baguette efface tout.",
     wandZones: "{n} zones sélectionnées",
     tutorials: "Tutoriels",
     close: "Fermer",
@@ -289,7 +289,7 @@ const translations = {
     bgImage: "画像",
     bgReset: "リセット",
     wandRedo: "やり直し",
-    wandKeys: "Ctrl+クリックで領域を追加 · Ctrl+Z 取り消し · Ctrl+Shift+Z やり直し · Ctrl+ホイール ズーム",
+    wandKeys: "クリックで追加。再クリックか右クリックで解除。Shift+クリックで重ねる。Deleteで最後を解除。ワンドで全解除。",
     wandZones: "{n} 箇所を選択中",
     tutorials: "チュートリアル",
     close: "閉じる",
@@ -393,7 +393,7 @@ const translations = {
     bgImage: "图片",
     bgReset: "重置",
     wandRedo: "重做",
-    wandKeys: "Ctrl+点击添加区域 · Ctrl+Z 撤销 · Ctrl+Shift+Z 重做 · Ctrl+滚轮 缩放",
+    wandKeys: "点击添加。再点或右键移除。Shift+点击叠加。Delete 移除最后一区。再点魔棒清空。",
     wandZones: "已选择 {n} 个区域",
     tutorials: "教程",
     close: "关闭",
@@ -497,7 +497,7 @@ const translations = {
     bgImage: "Resim",
     bgReset: "Sıfırla",
     wandRedo: "Yinele",
-    wandKeys: "Ctrl+tık ile bölge ekle · Ctrl+Z geri al · Ctrl+Shift+Z yinele · Ctrl+tekerlek yakınlaştır",
+    wandKeys: "Tık ekler. İkinci tık veya sağ tık kaldırır. Shift+tık üstüne ekler. Delete sonuncuyu kaldırır. Değnek tümünü siler.",
     wandZones: "{n} bölge seçildi",
     tutorials: "Eğitimler",
     close: "Kapat",
@@ -1795,7 +1795,7 @@ const wand = {
   flood: null, manual: null, restore: null, mask: null, removed: 0,
   refName: null, refData: null, diffCache: null, // model image for the difference eraser
   resized: false, // true when the image was scaled to the model's size
-  seeds: [], // pixel indices of the clicked points (Ctrl+click adds one)
+  seeds: [], // pixel indices of the clicked points (each click adds one)
   tool: 'flood', stroke: null, history: [], redo: [], zoom: 0 // zoom 0 = fit to window
 };
 const originals = {}; // name -> original File, for "Restore original"
@@ -1848,6 +1848,7 @@ function loadWandPixels(refName) {
     diffCache: null,
     resized: w !== img.naturalWidth || h !== img.naturalHeight,
     flood: null, manual: null, restore: null, mask: null, removed: 0, seeds: [],
+    zoneIndex: null, // one map, pixel -> zone id (1-based). Null means "rebuild on the next hit test"
     history: [], redo: [], stroke: null
   });
   wandCanvas.width = w;
@@ -1961,8 +1962,12 @@ function combinedMask() {
 /**
  * Pixels of the edited image that differ from the model, at the current tolerance
  * (each RGBA channel may differ by tolerance x 2.55). Cached until the tolerance changes.
+ * `wide` is the same mask grown by DIFF_GROW: the brush copies that, so a shifted
+ * edge is replaced as a whole instead of leaving a wavy second contour.
  * @returns {Uint8Array|null} null when there is no model
  */
+const DIFF_GROW = 4;
+
 function diffMask() {
   if (!wand.refData) return null;
   const tol = Number(wandTol.value);
@@ -1981,7 +1986,7 @@ function diffMask() {
       mask[i] = 1;
     }
   }
-  wand.diffCache = { tol, mask };
+  wand.diffCache = { tol, mask, wide: dilateMask(mask, DIFF_GROW) };
   return mask;
 }
 
@@ -2037,6 +2042,7 @@ function finalMask() {
  *   anti-aliased halo around outlines while keeping the dark outline itself.
  * The background colour is the mean colour of the removed pixels.
  * - Pixels touched by the difference eraser (wand.restore) take the model's pixel.
+ *   wand.restore is 0..255: 255 is a full copy, a lower value blends across the brush edge.
  * @param {Uint8Array|null} mask
  * @returns {ImageData}
  */
@@ -2046,8 +2052,17 @@ function buildOutput(mask) {
     const o = out.data;
     const r = wand.refData;
     for (let i = 0, q = 0; i < wand.restore.length; i++, q += 4) {
-      if (!wand.restore[i]) continue;
-      o[q] = r[q]; o[q + 1] = r[q + 1]; o[q + 2] = r[q + 2]; o[q + 3] = r[q + 3];
+      const t = wand.restore[i];
+      if (!t) continue;
+      if (t >= 255) {
+        o[q] = r[q]; o[q + 1] = r[q + 1]; o[q + 2] = r[q + 2]; o[q + 3] = r[q + 3];
+        continue;
+      }
+      const k = 255 - t;
+      o[q] = (r[q] * t + o[q] * k + 127) / 255 | 0;
+      o[q + 1] = (r[q + 1] * t + o[q + 1] * k + 127) / 255 | 0;
+      o[q + 2] = (r[q + 2] * t + o[q + 2] * k + 127) / 255 | 0;
+      o[q + 3] = (r[q + 3] * t + o[q + 3] * k + 127) / 255 | 0;
     }
   }
   return out;
@@ -2131,26 +2146,62 @@ function renderWand() {
 }
 
 /**
- * Recomputes the wand selection: the union of the flood fill of every seed point.
- * Called when a point is clicked, and when the tolerance or "All areas" change.
+ * One map of which zone owns each pixel (later zones win on overlaps).
+ * Two bytes per pixel, however many zones there are, instead of a full mask per zone.
+ * @returns {Uint16Array} 0 = outside, otherwise the zone number starting at 1
  */
+function buildZoneIndex() {
+  const index = new Uint16Array(wand.w * wand.h);
+  const tol = Number(wandTol.value);
+  const global = wandGlobal.checked;
+  let id = 1;
+  for (const seed of wand.seeds) {
+    const { mask } = computeMask(seed, tol, global);
+    for (let i = 0; i < mask.length; i++) {
+      if (mask[i]) index[i] = id;
+    }
+    id++;
+  }
+  return index;
+}
+
+/** Rebuilds the removed area from every seed, and the zone map that goes with it. */
 function refreshWandMask() {
   if (!wand.seeds.length) {
     wand.flood = null;
+    wand.zoneIndex = null;
     renderWand();
     return;
   }
-  const tol = Number(wandTol.value);
-  const global = wandGlobal.checked;
-  const union = new Uint8Array(wand.w * wand.h);
-  for (const seed of wand.seeds) {
-    const { mask } = computeMask(seed, tol, global);
-    for (let i = 0; i < union.length; i++) {
-      if (mask[i]) union[i] = 1;
-    }
+  const index = buildZoneIndex();
+  const union = new Uint8Array(index.length);
+  for (let i = 0; i < index.length; i++) {
+    if (index[i]) union[i] = 1;
   }
+  wand.zoneIndex = index;
   wand.flood = union;
   renderWand();
+}
+
+// Adds the newest seed onto the map already on screen. One flood, not one per zone.
+function appendZone(seed) {
+  const { mask } = computeMask(seed, Number(wandTol.value), wandGlobal.checked);
+  const id = wand.seeds.length;
+  const index = wand.zoneIndex;
+  const union = wand.flood;
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue;
+    union[i] = 1;
+    index[i] = id;
+  }
+  renderWand();
+}
+
+// Undo restores the union, not the map. The next hit test builds the map once.
+function ensureZoneIndex() {
+  if (wand.zoneIndex) return;
+  if (!wand.seeds.length) return;
+  wand.zoneIndex = buildZoneIndex();
 }
 
 function snapshotWand() {
@@ -2167,6 +2218,7 @@ function restoreWand(s) {
   wand.manual = s.manual;
   wand.restore = s.restore;
   wand.seeds = s.seeds.slice();
+  wand.zoneIndex = null;
   renderWand();
   updateUndoButtons();
 }
@@ -2221,8 +2273,11 @@ function canvasPoint(e) {
 }
 
 // Erases a disc of pixels; in "magic eraser" mode, only the start point's colour.
-// In "difference eraser" mode, nothing is erased: the pixels of the disc that differ from
-// the model are marked to take the model's pixel, the others are left as they are.
+// In "difference eraser" mode, nothing is erased. Pixels of the disc that differ from
+// the model, plus DIFF_GROW pixels around them, take the model's pixel. The last
+// pixels of the disc are blended so the brush edge itself does not draw a ring.
+const DIFF_FEATHER = 2;
+
 function paintAt(x, y) {
   const { w, h } = wand;
   const r = Number(wandSize.value);
@@ -2236,19 +2291,28 @@ function paintAt(x, y) {
   } else if (!wand.manual) {
     wand.manual = new Uint8Array(w * h);
   }
+  const wide = diff && wand.diffCache ? wand.diffCache.wide : null;
   const magic = wand.tool === 'magic';
   const seed = wand.stroke ? wand.stroke.seed : 0;
+  const feather = Math.min(DIFF_FEATHER, r);
 
   for (let dy = -r; dy <= r; dy++) {
     const py = y + dy;
     if (py < 0 || py >= h) continue;
     for (let dx = -r; dx <= r; dx++) {
-      if (dx * dx + dy * dy > r2) continue;
+      const dist2 = dx * dx + dy * dy;
+      if (dist2 > r2) continue;
       const px = x + dx;
       if (px < 0 || px >= w) continue;
       const i = py * w + px;
-      if (diff) {
-        if (diff[i]) wand.restore[i] = 1;
+      if (wide) {
+        if (!wide[i]) continue;
+        let wgt = 255;
+        if (feather > 0) {
+          const dist = Math.sqrt(dist2);
+          if (dist > r - feather) wgt = Math.max(1, (255 * (r - dist) / feather + 0.5) | 0);
+        }
+        if (wgt > wand.restore[i]) wand.restore[i] = wgt;
         continue;
       }
       if (magic && !matches(d, i, seed, thr)) continue;
@@ -2314,7 +2378,19 @@ wandGrow.addEventListener('input', () => {
 });
 
 document.querySelectorAll('.tool').forEach(b => {
-  b.addEventListener('click', () => setTool(b.dataset.tool));
+  b.addEventListener('click', () => {
+    // A second click on Wand clears every zone. One zone is removed by clicking it
+    // again (or right-clicking it). Switching to another tool and back keeps the zones.
+    if (b.dataset.tool === 'flood' && wand.tool === 'flood') {
+      if (wand.seeds.length) {
+        pushHistory();
+        wand.seeds = [];
+        refreshWandMask();
+      }
+      return;
+    }
+    setTool(b.dataset.tool);
+  });
 });
 
 // ---------- Brush preview (Eraser / Magic eraser / Difference eraser) ----------
@@ -2372,7 +2448,16 @@ document.getElementById('wandRedo').addEventListener('click', redoWand);
 
 // Editor shortcuts (only while the editor is open)
 document.addEventListener('keydown', e => {
-  if (!wandDialog.open || !(e.ctrlKey || e.metaKey)) return;
+  if (!wandDialog.open) return;
+  const inField = e.target.closest && e.target.closest('input, textarea, select');
+  // Delete / Backspace removes the last zone. Right-click is not available from the keyboard.
+  if (!inField && !e.ctrlKey && !e.metaKey && !e.altKey &&
+      (e.key === 'Delete' || e.key === 'Backspace') && wand.tool === 'flood' && wand.seeds.length) {
+    e.preventDefault();
+    dropZone(wand.seeds.length - 1);
+    return;
+  }
+  if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
   if (k === 'z' && !e.shiftKey) { e.preventDefault(); undoWand(); }
   else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redoWand(); }
@@ -2402,17 +2487,45 @@ window.addEventListener('beforeunload', e => {
   e.returnValue = '';
 });
 
+// Index of the zone that covers this pixel, or -1. The clicked seed wins if the pointer
+// is on it. Otherwise the newest zone covering the pixel wins.
+function zoneIndexAt(pixel) {
+  const exact = wand.seeds.indexOf(pixel);
+  if (exact !== -1) return exact;
+  if (!wand.flood || !wand.flood[pixel]) return -1;
+  ensureZoneIndex();
+  const id = wand.zoneIndex[pixel];
+  return id ? id - 1 : -1;
+}
+
+function dropZone(index) {
+  pushHistory();
+  wand.seeds.splice(index, 1);
+  refreshWandMask();
+}
+
 wandCanvas.addEventListener('pointerdown', e => {
   if (!wand.data || e.button !== 0) return;
   const p = canvasPoint(e);
   if (wand.tool === 'flood') {
     if (p.x < 0 || p.y < 0 || p.x >= wand.w || p.y >= wand.h) return;
-    pushHistory();
     const seed = p.y * wand.w + p.x;
-    // Ctrl+click (Cmd+click on Mac) adds a zone; a plain click starts a new selection
-    if (e.ctrlKey || e.metaKey) wand.seeds.push(seed);
-    else wand.seeds = [seed];
-    refreshWandMask();
+    // Shift forces a new zone, so a click inside an existing one can still add.
+    if (!e.shiftKey) {
+      const zone = zoneIndexAt(seed);
+      if (zone >= 0) {
+        dropZone(zone);
+        return;
+      }
+    } else if (wand.seeds.includes(seed)) {
+      return;
+    }
+    pushHistory();
+    wand.seeds.push(seed);
+    // Stacking only paints the new zone. A full rebuild happens when the map is missing
+    // (first zone, or just after undo) and when a zone is removed.
+    if (wand.zoneIndex && wand.flood && wand.zoneIndex.length === wand.w * wand.h) appendZone(seed);
+    else refreshWandMask();
     return;
   }
   // Eraser: a brush stroke starts here
@@ -2437,6 +2550,16 @@ function endStroke() {
 }
 wandCanvas.addEventListener('pointerup', endStroke);
 wandCanvas.addEventListener('pointercancel', endStroke);
+
+// Right-click removes only the zone under the pointer. It does not add one.
+wandCanvas.addEventListener('contextmenu', e => {
+  if (!wandDialog.open || !wand.data || wand.tool !== 'flood') return;
+  e.preventDefault();
+  const p = canvasPoint(e);
+  if (p.x < 0 || p.y < 0 || p.x >= wand.w || p.y >= wand.h) return;
+  const zone = zoneIndexAt(p.y * wand.w + p.x);
+  if (zone >= 0) dropZone(zone);
+});
 
 wandTol.addEventListener('input', () => {
   wandTolOut.textContent = wandTol.value;
