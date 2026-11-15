@@ -9,16 +9,24 @@
  *   5. settings.ini      generateSettingsIni() and the ZIP export button
  *   6. simulation       "Simulate pattern": a small state machine that mimics the
  *                        Flood Tuber OBS plugin (talking / idle / action / blink)
- *   7. magic wand        background removal editor (flood fill, eraser, undo/redo, zoom)
+ *   7. magic wand        image editor: background removal (flood fill, erasers) and the
+ *                        difference eraser (copies the model's pixels), undo/redo, zoom
  *   8. tutorials         tutorial dialog
  *
- * Data model: each sprite slot is identified by its file name (e.g. "idle.png").
- *   files[name]   -> the File the user chose (or the processed PNG after the wand)
+ * Data model: each sprite slot is identified by its base name, without extension
+ * (e.g. "idle"). The extension written into the ZIP follows the real format of the file.
+ *   files[name]   -> the File written into the ZIP (the user's file, or a PNG after
+ *                    conversion or the magic wand)
+ *   formats[name] -> { kind, ext, animated, frames, w, h }, read from the file signature
  *   images[name]  -> { img, url }: the loaded <img> and its object URL
  *   slots[name]   -> DOM references for the slot card
  *
- * The file names, the `order` array in updatePreview() and the settings.ini keys
- * are a contract with Flood Tuber. Change them only together.
+ * The base names (SLOT_ORDER), the extensions and the settings.ini keys are a contract
+ * with Flood Tuber. Change them only together.
+ *
+ * Target version (#targetVersion): the package is built for Flood Tuber 1.3.0 (PNG files
+ * only, talk images A to C, fewer settings) or 1.4.0 (everything). Elements that only exist
+ * in 1.4.0 carry data-since="1.4.0" in index.html; is13() is the test used in this file.
  *
  * To add a language: copy the `en` block below, translate every key, then add a
  * matching <button data-lang="xx"> in index.html.
@@ -33,7 +41,7 @@ const translations = {
     required: "required",
     clickOrDrop: "Click or drop",
     previewTitle: "Overlay preview",
-    stackEmpty: "Add idle.png to see the stack.",
+    stackEmpty: "Add idle to see the stack.",
     globalOpacity: "Opacity:",
     diffMode: "Difference",
     diffNormal: "Normal mode",
@@ -41,7 +49,7 @@ const translations = {
     settingsTitle: "settings.ini",
     generateZip: "Download ZIP package",
     credits: "Character makers that match the expression slots:",
-    idleRequired: "idle.png is required!",
+    idleRequired: "idle is required!",
     simulate: "Simulate pattern",
     simulateStop: "Stop simulation",
     simIdle: "IDLE",
@@ -56,7 +64,6 @@ const translations = {
     wandTolerance: "Tolerance:",
     wandGlobal: "All areas of this colour",
     wandInfo: "{n} px removed",
-    wandAnimWarn: "Animated GIF/APNG: only the first frame is processed.",
     wandApply: "Apply",
     wandCancel: "Cancel",
     wandRestore: "Restore original",
@@ -86,7 +93,7 @@ const translations = {
 <h3>Steps</h3>
 <ol>
 <li>Create your images with a generator, or use your own drawings.</li>
-<li>Drop each expression into its slot. <code>idle.png</code> is required; <code>talk_a/b/c.png</code> are the mouth images while speaking, and the <code>_blink</code> variants handle blinking while speaking.</li>
+<li>Drop each expression into its slot. <code>idle</code> is required; <code>talk_a/b/c</code> are the mouth images while speaking, and the <code>_blink</code> variants handle blinking while speaking.</li>
 <li>Check the alignment with the preview and layers (Difference mode).</li>
 <li>If the background gets in the way, use the magic wand, the eraser or the magic eraser.</li>
 <li>Test the behaviour with "Simulate pattern".</li>
@@ -95,6 +102,25 @@ const translations = {
 </ol>`,
     generating: "Generating ZIP...",
     success: "ZIP downloaded!",
+    extraTalk: "Extra talk images (D, E, F)",
+    talkGap: "{missing} missing before {last}: during speech, each missing step shows the previous image.",
+    animTotalOver: "{file}: {frames} frames of {w}×{h} px take about {size} of video memory. Flood Tuber cuts the animation beyond 1 GB.",
+    animTotalNear: "{file}: {frames} frames of {w}×{h} px take about {size} of video memory, close to the 1 GB limit where Flood Tuber cuts the animation.",
+    apngFrameOver: "{file}: one decoded frame takes {size}. Flood Tuber refuses an APNG whose frame exceeds 256 MB.",
+    apngFrameNear: "{file}: one decoded frame takes {size}, close to the 256 MB limit above which Flood Tuber refuses an APNG.",
+    nameInvalid: "Enter an avatar name. Characters \\ / : * ? \" < > | and leading or trailing spaces and dots are removed.",
+    intervalError: "{section}: the minimum must not exceed the maximum.",
+    notImage: "{file}: this file is not a readable image.",
+    convertedPng: "{file}: converted to PNG.",
+    mouth_mode: "Mouth Mode",
+    mouth_range: "Volume Range (dB)",
+    targetVersion: "Flood Tuber version:",
+    v13Still: "{files}: Flood Tuber 1.3.0 only reads PNG files. Exported as PNG; an animation keeps only its first frame.",
+    v13Skipped: "{files}: not exported. Flood Tuber 1.3.0 only uses talk images A to C.",
+    animNoEdit: "GIF or animated image: editing is not available here. Use a third-party tool such as ezgif.com.",
+    toolDiff: "Difference eraser",
+    wandRef: "Model:",
+    diffLeft: "{n} px differ from {ref}",
     // Settings labels from official locale
     threshold: "Activation Threshold (dB)",
     release_delay: "Release Delay (ms)",
@@ -120,7 +146,7 @@ const translations = {
     required: "requis",
     clickOrDrop: "Cliquez ou déposez",
     previewTitle: "Prévisualisation / Superposition (calques)",
-    stackEmpty: "Ajoutez idle.png pour voir la superposition.",
+    stackEmpty: "Ajoutez idle pour voir la superposition.",
     globalOpacity: "Opacité globale :",
     diffMode: "Mode Différence",
     diffNormal: "Mode normal",
@@ -128,7 +154,7 @@ const translations = {
     settingsTitle: "settings.ini",
     generateZip: "Générer et télécharger le package ZIP",
     credits: "Générateurs de personnages compatibles avec les emplacements d’expressions :",
-    idleRequired: "idle.png est obligatoire !",
+    idleRequired: "idle est obligatoire !",
     simulate: "Simuler le paterne",
     simulateStop: "Arrêter la simulation",
     simIdle: "REPOS",
@@ -143,7 +169,6 @@ const translations = {
     wandTolerance: "Tolérance :",
     wandGlobal: "Toutes les zones de cette couleur",
     wandInfo: "{n} px effacés",
-    wandAnimWarn: "GIF/APNG animé : seule la première image est traitée.",
     wandApply: "Appliquer",
     wandCancel: "Annuler",
     wandRestore: "Restaurer l’original",
@@ -173,7 +198,7 @@ const translations = {
 <h3>Étapes</h3>
 <ol>
 <li>Crée tes images avec un générateur, ou utilise tes propres dessins.</li>
-<li>Dépose chaque expression dans son emplacement. <code>idle.png</code> est obligatoire ; <code>talk_a/b/c.png</code> sont les images de bouche pendant la parole, et les variantes <code>_blink</code> gèrent le clignement en parlant.</li>
+<li>Dépose chaque expression dans son emplacement. <code>idle</code> est obligatoire ; <code>talk_a/b/c</code> sont les images de bouche pendant la parole, et les variantes <code>_blink</code> gèrent le clignement en parlant.</li>
 <li>Vérifie l’alignement avec l’aperçu et les calques (Mode Différence).</li>
 <li>Si le fond gêne, utilise la baguette magique, la gomme ou la gomme magique.</li>
 <li>Teste le comportement avec « Simuler le paterne ».</li>
@@ -182,6 +207,25 @@ const translations = {
 </ol>`,
     generating: "Génération du ZIP...",
     success: "ZIP téléchargé !",
+    extraTalk: "Images de parole supplémentaires (D, E, F)",
+    talkGap: "{missing} manquant avant {last} : pendant la parole, chaque étape manquante affiche l’image précédente.",
+    animTotalOver: "{file} : {frames} images de {w}×{h} px occupent environ {size} de mémoire vidéo. Flood Tuber tronque l’animation au-delà de 1 Go.",
+    animTotalNear: "{file} : {frames} images de {w}×{h} px occupent environ {size} de mémoire vidéo, proche de la limite de 1 Go au-delà de laquelle Flood Tuber tronque l’animation.",
+    apngFrameOver: "{file} : une image décodée occupe {size}. Flood Tuber refuse un APNG dont une image dépasse 256 Mo.",
+    apngFrameNear: "{file} : une image décodée occupe {size}, proche de la limite de 256 Mo au-delà de laquelle Flood Tuber refuse un APNG.",
+    nameInvalid: "Saisissez un nom d’avatar. Les caractères \\ / : * ? \" < > | ainsi que les espaces et points en début et en fin sont retirés.",
+    intervalError: "{section} : le minimum ne doit pas dépasser le maximum.",
+    notImage: "{file} : ce fichier n’est pas une image lisible.",
+    convertedPng: "{file} : converti en PNG.",
+    mouth_mode: "Mode de la bouche",
+    mouth_range: "Plage de volume (dB)",
+    targetVersion: "Version de Flood Tuber :",
+    v13Still: "{files} : Flood Tuber 1.3.0 ne lit que des fichiers PNG. Export en PNG ; une animation ne garde que sa première image.",
+    v13Skipped: "{files} : non exporté. Flood Tuber 1.3.0 n’utilise que les images de parole A à C.",
+    animNoEdit: "GIF ou image animée : la retouche n’est pas disponible ici. Utilisez un outil tiers comme ezgif.com.",
+    toolDiff: "Gomme de différences",
+    wandRef: "Modèle :",
+    diffLeft: "{n} px diffèrent de {ref}",
     threshold: "Seuil d'activation (dB)",
     release_delay: "Délai de relâchement (ms)",
     talking_speed: "Vitesse de la bouche (s/image)",
@@ -206,7 +250,7 @@ const translations = {
     required: "必須",
     clickOrDrop: "クリックまたはドロップ",
     previewTitle: "プレビュー / 重ね合わせ（レイヤー）",
-    stackEmpty: "スタックを見るには idle.png を追加してください。",
+    stackEmpty: "スタックを見るには idle を追加してください。",
     globalOpacity: "全体の不透明度:",
     diffMode: "差分モード",
     diffNormal: "通常モード",
@@ -214,7 +258,7 @@ const translations = {
     settingsTitle: "settings.ini",
     generateZip: "ZIPパッケージを生成してダウンロード",
     credits: "表情スロットに対応するキャラクター作成ツール：",
-    idleRequired: "idle.png は必須です！",
+    idleRequired: "idle は必須です！",
     simulate: "パターンをシミュレート",
     simulateStop: "シミュレーションを停止",
     simIdle: "待機",
@@ -229,7 +273,6 @@ const translations = {
     wandTolerance: "許容値:",
     wandGlobal: "この色のすべての領域",
     wandInfo: "{n} px を削除",
-    wandAnimWarn: "アニメーションGIF/APNG：最初のフレームのみ処理されます。",
     wandApply: "適用",
     wandCancel: "キャンセル",
     wandRestore: "元に戻す",
@@ -259,7 +302,7 @@ const translations = {
 <h3>手順</h3>
 <ol>
 <li>ジェネレーターで画像を作るか、自分の絵を使います。</li>
-<li>各表情を対応するスロットにドロップします。<code>idle.png</code> は必須です。<code>talk_a/b/c.png</code> は話している間の口の画像で、<code>_blink</code> の版は話している間のまばたきに使われます。</li>
+<li>各表情を対応するスロットにドロップします。<code>idle</code> は必須です。<code>talk_a/b/c</code> は話している間の口の画像で、<code>_blink</code> の版は話している間のまばたきに使われます。</li>
 <li>プレビューとレイヤー（差分モード）で位置合わせを確認します。</li>
 <li>背景が邪魔なら、マジックワンド・消しゴム・マジック消しゴムを使います。</li>
 <li>「パターンをシミュレート」で動きを確認します。</li>
@@ -268,6 +311,25 @@ const translations = {
 </ol>`,
     generating: "ZIPを生成中...",
     success: "ZIPをダウンロードしました！",
+    extraTalk: "追加の会話画像（D、E、F）",
+    talkGap: "{last} の前の {missing} がありません。会話中、欠けているステップでは直前の画像が表示されます。",
+    animTotalOver: "{file}：{w}×{h} px のフレームが {frames} 枚で、ビデオメモリを約 {size} 使用します。Flood Tuber は 1 GB を超える分のアニメーションを切り捨てます。",
+    animTotalNear: "{file}：{w}×{h} px のフレームが {frames} 枚で、ビデオメモリを約 {size} 使用します。Flood Tuber がアニメーションを切り捨てる 1 GB の上限に近い値です。",
+    apngFrameOver: "{file}：デコード後の 1 フレームが {size} になります。Flood Tuber は 1 フレームが 256 MB を超える APNG を読み込みません。",
+    apngFrameNear: "{file}：デコード後の 1 フレームが {size} になります。Flood Tuber が APNG を読み込まなくなる 256 MB の上限に近い値です。",
+    nameInvalid: "アバター名を入力してください。\\ / : * ? \" < > | の文字と、先頭・末尾の空白およびピリオドは削除されます。",
+    intervalError: "{section}：最小値が最大値を超えないようにしてください。",
+    notImage: "{file}：このファイルは画像として読み込めません。",
+    convertedPng: "{file}：PNG に変換しました。",
+    mouth_mode: "口のモード",
+    mouth_range: "音量の範囲 (dB)",
+    targetVersion: "Flood Tuber のバージョン:",
+    v13Still: "{files}：Flood Tuber 1.3.0 は PNG ファイルしか読み込みません。PNG として書き出します。アニメーションは最初のフレームだけが残ります。",
+    v13Skipped: "{files}：書き出されません。Flood Tuber 1.3.0 が使う会話画像は A〜C のみです。",
+    animNoEdit: "GIF またはアニメーション画像：ここでは編集できません。ezgif.com などの外部ツールを使ってください。",
+    toolDiff: "差分消しゴム",
+    wandRef: "モデル:",
+    diffLeft: "{ref} と異なるピクセル：{n} px",
     threshold: "作動しきい値 (dB)",
     release_delay: "解放までの遅延 (ms)",
     talking_speed: "口の動作速度 (秒/フレーム)",
@@ -292,7 +354,7 @@ const translations = {
     required: "必需",
     clickOrDrop: "点击或拖放",
     previewTitle: "预览 / 叠加（图层）",
-    stackEmpty: "添加 idle.png 以查看叠加。",
+    stackEmpty: "添加 idle 以查看叠加。",
     globalOpacity: "全局不透明度：",
     diffMode: "差异模式",
     diffNormal: "普通模式",
@@ -300,7 +362,7 @@ const translations = {
     settingsTitle: "settings.ini",
     generateZip: "生成并下载 ZIP 包",
     credits: "与表情插槽匹配的角色制作工具：",
-    idleRequired: "idle.png 是必需的！",
+    idleRequired: "idle 是必需的！",
     simulate: "模拟动作模式",
     simulateStop: "停止模拟",
     simIdle: "待机",
@@ -315,7 +377,6 @@ const translations = {
     wandTolerance: "容差：",
     wandGlobal: "此颜色的所有区域",
     wandInfo: "已删除 {n} 像素",
-    wandAnimWarn: "动画 GIF/APNG：仅处理第一帧。",
     wandApply: "应用",
     wandCancel: "取消",
     wandRestore: "恢复原图",
@@ -345,7 +406,7 @@ const translations = {
 <h3>步骤</h3>
 <ol>
 <li>用生成器制作图片，或使用自己的绘图。</li>
-<li>把每个表情拖到对应插槽。<code>idle.png</code> 为必需；<code>talk_a/b/c.png</code> 是说话时的嘴部图片，<code>_blink</code> 版本负责说话时的眨眼。</li>
+<li>把每个表情拖到对应插槽。<code>idle</code> 为必需；<code>talk_a/b/c</code> 是说话时的嘴部图片，<code>_blink</code> 版本负责说话时的眨眼。</li>
 <li>用预览和图层（差异模式）检查对齐。</li>
 <li>如果背景有干扰，使用魔棒、橡皮擦或魔法橡皮擦。</li>
 <li>用“模拟动作模式”测试效果。</li>
@@ -354,6 +415,25 @@ const translations = {
 </ol>`,
     generating: "正在生成 ZIP...",
     success: "ZIP 已下载！",
+    extraTalk: "额外的说话图片（D、E、F）",
+    talkGap: "{last} 之前缺少 {missing}：说话时，缺少的步骤会显示上一张图片。",
+    animTotalOver: "{file}：{frames} 帧 {w}×{h} px 的图像约占用 {size} 显存。超过 1 GB 的部分 Flood Tuber 会截断动画。",
+    animTotalNear: "{file}：{frames} 帧 {w}×{h} px 的图像约占用 {size} 显存，接近 Flood Tuber 截断动画的 1 GB 上限。",
+    apngFrameOver: "{file}：解码后的单帧占用 {size}。单帧超过 256 MB 的 APNG 会被 Flood Tuber 拒绝。",
+    apngFrameNear: "{file}：解码后的单帧占用 {size}，接近 Flood Tuber 拒绝 APNG 的 256 MB 上限。",
+    nameInvalid: "请输入头像名称。字符 \\ / : * ? \" < > | 以及开头和结尾的空格和句点会被删除。",
+    intervalError: "{section}：最小值不能大于最大值。",
+    notImage: "{file}：此文件不是可读取的图像。",
+    convertedPng: "{file}：已转换为 PNG。",
+    mouth_mode: "嘴部模式",
+    mouth_range: "音量范围 (dB)",
+    targetVersion: "Flood Tuber 版本：",
+    v13Still: "{files}：Flood Tuber 1.3.0 只读取 PNG 文件。将导出为 PNG；动画只保留第一帧。",
+    v13Skipped: "{files}：不会导出。Flood Tuber 1.3.0 只使用说话图片 A 到 C。",
+    animNoEdit: "GIF 或动画图像：此处无法编辑。请使用 ezgif.com 等第三方工具。",
+    toolDiff: "差异橡皮擦",
+    wandRef: "参照图：",
+    diffLeft: "与 {ref} 不同的像素：{n} px",
     threshold: "激活阈值 (dB)",
     release_delay: "释放延迟 (ms)",
     talking_speed: "嘴部速度 (秒/帧)",
@@ -378,7 +458,7 @@ const translations = {
     required: "zorunlu",
     clickOrDrop: "Tıklayın veya sürükleyin",
     previewTitle: "Önizleme / Üst üste bindirme (katmanlar)",
-    stackEmpty: "Yığını görmek için idle.png ekleyin.",
+    stackEmpty: "Yığını görmek için idle ekleyin.",
     globalOpacity: "Genel opaklık:",
     diffMode: "Fark Modu",
     diffNormal: "Normal mod",
@@ -386,7 +466,7 @@ const translations = {
     settingsTitle: "settings.ini",
     generateZip: "ZIP paketini oluştur ve indir",
     credits: "Expression yuvalarıyla uyumlu karakter oluşturucular:",
-    idleRequired: "idle.png zorunludur!",
+    idleRequired: "idle zorunludur!",
     simulate: "Paterni simüle et",
     simulateStop: "Simülasyonu durdur",
     simIdle: "BEKLEME",
@@ -401,7 +481,6 @@ const translations = {
     wandTolerance: "Tolerans:",
     wandGlobal: "Bu renkteki tüm alanlar",
     wandInfo: "{n} px silindi",
-    wandAnimWarn: "Animasyonlu GIF/APNG: yalnızca ilk kare işlenir.",
     wandApply: "Uygula",
     wandCancel: "İptal",
     wandRestore: "Orijinali geri yükle",
@@ -431,7 +510,7 @@ const translations = {
 <h3>Adımlar</h3>
 <ol>
 <li>Görsellerinizi bir oluşturucuyla hazırlayın veya kendi çizimlerinizi kullanın.</li>
-<li>Her ifadeyi kendi yuvasına bırakın. <code>idle.png</code> zorunludur; <code>talk_a/b/c.png</code> konuşurken ağız görselleridir, <code>_blink</code> varyantları konuşurken göz kırpmayı yönetir.</li>
+<li>Her ifadeyi kendi yuvasına bırakın. <code>idle</code> zorunludur; <code>talk_a/b/c</code> konuşurken ağız görselleridir, <code>_blink</code> varyantları konuşurken göz kırpmayı yönetir.</li>
 <li>Önizleme ve katmanlarla (Fark Modu) hizalamayı kontrol edin.</li>
 <li>Arka plan sorun çıkarıyorsa sihirli değneği, silgiyi veya sihirli silgiyi kullanın.</li>
 <li>"Paterni simüle et" ile davranışı test edin.</li>
@@ -440,6 +519,25 @@ const translations = {
 </ol>`,
     generating: "ZIP oluşturuluyor...",
     success: "ZIP indirildi!",
+    extraTalk: "Ek konuşma görselleri (D, E, F)",
+    talkGap: "{last} öncesinde {missing} eksik: konuşma sırasında eksik her adım bir önceki görseli gösterir.",
+    animTotalOver: "{file}: {w}×{h} px boyutunda {frames} kare yaklaşık {size} video belleği kullanır. Flood Tuber animasyonu 1 GB'ın üzerinde keser.",
+    animTotalNear: "{file}: {w}×{h} px boyutunda {frames} kare yaklaşık {size} video belleği kullanır; Flood Tuber'ın animasyonu kestiği 1 GB sınırına yakın.",
+    apngFrameOver: "{file}: çözülmüş tek bir kare {size} yer kaplar. Flood Tuber, bir karesi 256 MB'ı aşan APNG'yi reddeder.",
+    apngFrameNear: "{file}: çözülmüş tek bir kare {size} yer kaplar; Flood Tuber'ın APNG'yi reddettiği 256 MB sınırına yakın.",
+    nameInvalid: "Bir avatar adı girin. \\ / : * ? \" < > | karakterleri ile baştaki ve sondaki boşluklar ve noktalar kaldırılır.",
+    intervalError: "{section}: en küçük değer en büyük değeri aşmamalıdır.",
+    notImage: "{file}: bu dosya okunabilir bir görsel değil.",
+    convertedPng: "{file}: PNG'ye dönüştürüldü.",
+    mouth_mode: "Ağız Modu",
+    mouth_range: "Ses Aralığı (dB)",
+    targetVersion: "Flood Tuber sürümü:",
+    v13Still: "{files}: Flood Tuber 1.3.0 yalnızca PNG dosyalarını okur. PNG olarak dışa aktarılır; animasyonun yalnızca ilk karesi kalır.",
+    v13Skipped: "{files}: dışa aktarılmadı. Flood Tuber 1.3.0 yalnızca A–C konuşma görsellerini kullanır.",
+    animNoEdit: "GIF veya animasyonlu görsel: düzenleme burada kullanılamaz. ezgif.com gibi üçüncü taraf bir araç kullanın.",
+    toolDiff: "Fark silgisi",
+    wandRef: "Model:",
+    diffLeft: "{n} px {ref} görselinden farklı",
     threshold: "Aktivasyon Eşiği (dB)",
     release_delay: "Bırakma Gecikmesi (ms)",
     talking_speed: "Ağız Hızı (sn/kare)",
@@ -460,6 +558,7 @@ const translations = {
 // Language currently shown in the UI: 'en' | 'fr' | 'tr' | 'ja' | 'zh'.
 // Changed only through setLanguage(). English is the default.
 let currentLang = 'en';
+let appReady = false; // true once every section below has run (see the end of the file)
 let diffMode = false;
 let simulating = false;
 
@@ -480,6 +579,8 @@ function setLanguage(lang) {
     threshold: 'threshold',
     release_delay: 'release_delay',
     talking_speed: 'talking_speed',
+    mouth_mode: 'mouth_mode',
+    mouth_range: 'mouth_range',
     blink_duration: 'blink_duration',
     blink_interval_min: 'blink_interval_min',
     blink_interval_max: 'blink_interval_max',
@@ -505,6 +606,7 @@ function setLanguage(lang) {
   updateDiffLabel();
   updateSimLabel();
   renderTuto();
+  if (appReady) refreshWarnings();
   document.querySelectorAll('.lang-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.lang === lang);
   });
@@ -528,10 +630,158 @@ document.querySelectorAll('.lang-btn').forEach(btn => {
 setLanguage(currentLang);
 
 // ---------- Application state ----------
-// Keyed by sprite file name, e.g. "idle.png". See the data model at the top of the file.
+// Keyed by slot base name, e.g. "idle". See the data model at the top of the file.
 const slots = {};
-const files = {}; // name -> File
+const files = {}; // name -> File written into the ZIP
+const formats = {}; // name -> { kind, ext, animated, frames, w, h }
 const images = {}; // name -> { img, url }
+
+// Talk images in cycle order. A, B, C are the base; D, E, F are optional extras.
+const TALK = ['talk_a', 'talk_b', 'talk_c', 'talk_d', 'talk_e', 'talk_f'];
+// Every slot, in preview stacking order (idle at the bottom) and ZIP order.
+// Must match the data-name attributes in index.html.
+const SLOT_ORDER = ['idle', 'blink', 'action', ...TALK, ...TALK.map(n => n + '_blink')];
+// Slots hidden behind the "extra talk images" option
+const EXTRA_SLOTS = SLOT_ORDER.filter(n => /^talk_[def]/.test(n));
+
+// Replaces {key} placeholders in a translated string
+function fmt(text, values) {
+  return text.replace(/\{(\w+)\}/g, (m, k) => (k in values ? values[k] : m));
+}
+
+// ---------- Target plugin version ----------
+// Flood Tuber 1.3.0 only reads .png files, uses talk images A to C and ignores the
+// settings added in 1.4.0. The choice changes file names, visible slots, visible settings,
+// the simulation and the content of the ZIP.
+const targetSelect = document.getElementById('targetVersion');
+const is13 = () => targetSelect.value === '1.3.0';
+// Talk images and slots that exist in the chosen version
+const activeTalk = () => (is13() ? TALK.slice(0, 3) : TALK);
+const activeSlots = () => (is13() ? SLOT_ORDER.filter(n => !EXTRA_SLOTS.includes(n)) : SLOT_ORDER);
+
+// File name written into the ZIP: imposed base name + extension of the real format
+// (always .png for Flood Tuber 1.3.0)
+function outName(name) {
+  if (is13()) return `${name}.png`;
+  return `${name}.${formats[name] ? formats[name].ext : 'png'}`;
+}
+
+// The editing tools work on one still image and save a PNG: they are not offered for a
+// GIF or an animated file, which would lose its animation.
+function canEdit(name) {
+  const f = formats[name];
+  return !!f && !f.animated && f.kind !== 'gif';
+}
+
+// ---------- Image formats ----------
+// Flood Tuber 1.4.0 looks up each slot as .png, then .apng, .gif, .webp, and keeps the
+// extension of a GIF, WebP or APNG (a GIF animates only when the name ends in .gif).
+// The extension written here comes from the file signature, never from the dropped name.
+
+/**
+ * Identifies a PNG / APNG / GIF / WebP file from its first bytes and counts its frames.
+ * @param {Uint8Array} b  whole file
+ * @returns {{kind: string, ext: string, animated: boolean, frames: number, w: number, h: number}|null}
+ *          null when the file is none of these formats (JPEG, BMP…)
+ */
+function sniffImage(b) {
+  const be32 = i => ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0;
+  const le16 = i => b[i] | (b[i + 1] << 8);
+  const le24 = i => b[i] | (b[i + 1] << 8) | (b[i + 2] << 16);
+  const le32 = i => (b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24)) >>> 0;
+  const tag = i => String.fromCharCode(b[i], b[i + 1], b[i + 2], b[i + 3]);
+
+  // PNG / APNG: an acTL chunk before the first IDAT marks an animation
+  const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (b.length >= 24 && PNG_SIG.every((v, i) => b[i] === v)) {
+    let w = 0, h = 0, frames = 1, animated = false;
+    let pos = 8;
+    while (pos + 12 <= b.length) {
+      const len = be32(pos);
+      const type = tag(pos + 4);
+      if (type === 'IHDR') { w = be32(pos + 8); h = be32(pos + 12); }
+      else if (type === 'acTL') { frames = Math.max(1, be32(pos + 8)); animated = frames > 1; }
+      else if (type === 'IDAT' || type === 'IEND') break;
+      pos += 12 + len;
+    }
+    // Same rule as GIF and WebP: the extension is the format Flood Tuber 1.4.0 looks up.
+    // An animated PNG is .apng even when the dropped file was named .png.
+    const ext = animated ? 'apng' : 'png';
+    return { kind: 'png', ext, animated, frames, w, h };
+  }
+
+  // GIF: count the image descriptors
+  if (b.length >= 13 && (tag(0) + String.fromCharCode(b[4], b[5])).match(/^GIF8[79]a$/)) {
+    const w = le16(6), h = le16(8);
+    let pos = 13 + ((b[10] & 0x80) ? 3 * (1 << ((b[10] & 7) + 1)) : 0);
+    let frames = 0;
+    const skipBlocks = () => {
+      while (pos < b.length) {
+        const size = b[pos++];
+        if (size === 0) break;
+        pos += size;
+      }
+    };
+    while (pos < b.length) {
+      const block = b[pos];
+      if (block === 0x21) { pos += 2; skipBlocks(); }
+      else if (block === 0x2c) {
+        frames++;
+        const packed = b[pos + 9];
+        pos += 10 + ((packed & 0x80) ? 3 * (1 << ((packed & 7) + 1)) : 0);
+        pos++; // LZW minimum code size
+        skipBlocks();
+      } else break; // 0x3B trailer, or damaged data
+    }
+    frames = Math.max(1, frames);
+    return { kind: 'gif', ext: 'gif', animated: frames > 1, frames, w, h };
+  }
+
+  // WebP: the VP8X header carries the animation flag, each ANMF chunk is one frame
+  if (b.length >= 16 && tag(0) === 'RIFF' && tag(8) === 'WEBP') {
+    let w = 0, h = 0, frames = 0, animated = false;
+    let pos = 12;
+    while (pos + 8 <= b.length) {
+      const type = tag(pos);
+      const size = le32(pos + 4);
+      if (type === 'VP8X') {
+        animated = (b[pos + 8] & 0x02) !== 0;
+        w = le24(pos + 12) + 1;
+        h = le24(pos + 15) + 1;
+      } else if (type === 'ANMF') frames++;
+      pos += 8 + size + (size & 1);
+    }
+    frames = Math.max(1, frames);
+    return { kind: 'webp', ext: 'webp', animated: animated && frames > 1, frames, w, h };
+  }
+
+  return null;
+}
+
+/**
+ * Re-encodes any image the browser can decode (JPEG, BMP…) as a real PNG.
+ * @param {File} file
+ * @returns {Promise<Blob|null>} null when the file is not a readable image
+ */
+function reencodeAsPng(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      c.toBlob(blob => resolve(blob), 'image/png');
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
 
 const slotElements = document.querySelectorAll('.slot');
 const stack = document.getElementById('stack');
@@ -579,6 +829,15 @@ slotElements.forEach(slot => {
   slot.querySelector('.slot-head').appendChild(removeBtn);
   slots[name].removeBtn = removeBtn;
 
+  // Shown instead of the wand button when the file cannot be edited here (see canEdit)
+  const note = document.createElement('p');
+  note.className = 'slot-note';
+  note.hidden = true;
+  note.dataset.i18n = 'animNoEdit';
+  note.textContent = translations[currentLang].animNoEdit;
+  slot.appendChild(note);
+  slots[name].note = note;
+
   // Click anywhere on the slot opens the file dialog
   slot.addEventListener('click', (e) => {
     if (e.target.tagName !== 'INPUT') {
@@ -602,10 +861,9 @@ slotElements.forEach(slot => {
   dropzone.addEventListener('drop', e => {
     e.preventDefault();
     dropzone.classList.remove('dragover');
+    // No MIME filter: .apng often has an empty type. loadFile() checks the content.
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-      loadFile(name, file);
-    }
+    if (file) loadFile(name, file);
   });
 
   input.addEventListener('change', () => {
@@ -614,48 +872,183 @@ slotElements.forEach(slot => {
 });
 
 /**
- * The only place that fills `files` and `images` for a slot.
+ * The only place that fills `files`, `formats` and `images` for a slot.
  * Called by drag-and-drop, the file picker, and the magic wand (to store the edited PNG).
- * Decodes the image, shows a thumbnail in the slot and refreshes the preview.
- * @param {string} name  slot file name, e.g. "talk_a.png"
+ * Reads the real format from the file signature. PNG, APNG, GIF and WebP are kept
+ * byte for byte; anything else (JPEG, BMP…) is re-encoded as a PNG.
+ * @param {string} name  slot base name, e.g. "talk_a"
  * @param {File}   file  the image to store
  */
-function loadFile(name, file) {
-  files[name] = file;
-  dirty = true;
+async function loadFile(name, file) {
+  const shown = file.name || name;
+  const fail = () => setStatus(fmt(translations[currentLang].notImage, { file: shown }), 'bad');
+
+  let info;
+  try {
+    info = sniffImage(new Uint8Array(await file.arrayBuffer()));
+  } catch (err) {
+    fail();
+    return;
+  }
+
+  let converted = false;
+  if (!info) {
+    const blob = await reencodeAsPng(file);
+    if (!blob) {
+      fail();
+      return;
+    }
+    file = new File([blob], `${name}.png`, { type: 'image/png' });
+    info = { kind: 'png', ext: 'png', animated: false, frames: 1, w: 0, h: 0 };
+    converted = true;
+  }
+
   const url = URL.createObjectURL(file);
   const img = new Image();
-  img.src = url;
   img.onload = () => {
+    if (images[name]) URL.revokeObjectURL(images[name].url);
+    files[name] = file;
+    formats[name] = { ...info, w: info.w || img.naturalWidth, h: info.h || img.naturalHeight };
     images[name] = { img, url };
+    dirty = true;
     const { dropzone, slot } = slots[name];
-    dropzone.innerHTML = `<img src="${url}" alt="${name}">`;
+    dropzone.innerHTML = `<img src="${url}" alt="${outName(name)}">`;
     slot.classList.add('filled');
-    slots[name].wandBtn.hidden = false;
+    slot.querySelector('.slot-name').textContent = outName(name);
+    slots[name].wandBtn.hidden = !canEdit(name);
+    slots[name].note.hidden = canEdit(name);
     slots[name].removeBtn.hidden = false;
+    updateExtraSlots();
     updatePreview();
+    refreshWarnings();
+    if (converted) setStatus(fmt(translations[currentLang].convertedPng, { file: shown }), 'ok');
   };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    fail();
+  };
+  img.src = url;
 }
 
 /**
- * Empties a slot: drops its sprite from `files`, `images` and `originals`, resets the
- * thumbnail and refreshes the preview. Called by the red cross in the slot header.
- * @param {string} name  slot file name, e.g. "talk_a.png"
+ * Empties a slot: drops its sprite from `files`, `formats`, `images` and `originals`,
+ * resets the thumbnail and refreshes the preview. Called by the red cross in the slot header.
+ * @param {string} name  slot base name, e.g. "talk_a"
  */
 function clearSlot(name) {
   if (images[name]) URL.revokeObjectURL(images[name].url);
   delete images[name];
   delete files[name];
+  delete formats[name];
   delete originals[name];
-  const { dropzone, slot, input, wandBtn, removeBtn } = slots[name];
+  const { dropzone, slot, input, wandBtn, removeBtn, note } = slots[name];
   dropzone.innerHTML = `<span class="hint" data-i18n="clickOrDrop">${translations[currentLang].clickOrDrop}</span>`;
   slot.classList.remove('filled');
+  slot.querySelector('.slot-name').textContent = name;
+  note.hidden = true;
   wandBtn.hidden = true;
   removeBtn.hidden = true;
   input.value = ''; // so picking the same file again still fires "change"
   dirty = true;
   updatePreview();
+  refreshWarnings();
   setStatus(translations[currentLang].removeDone, 'ok');
+}
+
+// ---------- Extra talk images (D, E, F) ----------
+// Hidden by default, like in the plugin. They stay visible while one of them holds an image.
+const extraToggle = document.getElementById('extraTalk');
+
+function updateExtraSlots() {
+  if (EXTRA_SLOTS.some(n => files[n])) extraToggle.checked = true;
+  extraToggle.closest('label').hidden = is13(); // D, E, F do not exist in 1.3.0
+  EXTRA_SLOTS.forEach(n => {
+    slots[n].slot.hidden = is13() || !extraToggle.checked;
+  });
+}
+extraToggle.addEventListener('change', updateExtraSlots);
+updateExtraSlots();
+
+/**
+ * Applies the target plugin version to the page: hides what the version does not have,
+ * then refreshes the file names, the preview and the warnings. Nothing is deleted:
+ * switching back to 1.4.0 brings everything back.
+ */
+function applyTarget() {
+  document.querySelectorAll('[data-since="1.4.0"]').forEach(el => {
+    el.hidden = is13();
+  });
+  updateExtraSlots();
+  SLOT_ORDER.forEach(n => {
+    if (files[n]) slots[n].slot.querySelector('.slot-name').textContent = outName(n);
+  });
+  updatePreview();
+  refreshWarnings();
+}
+targetSelect.addEventListener('change', applyTarget);
+
+// ---------- Warnings ----------
+// Limits of the plugin's animation decoder. Every frame becomes a full-size RGBA texture.
+const APNG_FRAME_LIMIT = 256 * 1024 * 1024; // one decoded frame (width x height x 4): APNG refused above
+const ANIM_TOTAL_LIMIT = 1024 * 1024 * 1024; // all frames: animation cut above
+const NEAR_LIMIT = 0.8; // warn from 80 % of a limit
+
+function formatBytes(n) {
+  const fr = currentLang === 'fr';
+  if (n >= 1024 * 1024 * 1024) {
+    const gb = (n / (1024 * 1024 * 1024)).toFixed(2);
+    return fr ? gb.replace('.', ',') + ' Go' : gb + ' GB';
+  }
+  return Math.round(n / (1024 * 1024)) + (fr ? ' Mo' : ' MB');
+}
+
+/**
+ * Rebuilds the warning list under the slots: gaps in the talk cycle and animated files
+ * that exceed, or come close to, the plugin's memory limits. Warnings never block the export.
+ */
+function refreshWarnings() {
+  const t = translations[currentLang];
+  const msgs = [];
+
+  // Talk cycle: runs from A to the last image defined; a missing step shows the previous image
+  const talk = activeTalk();
+  let last = -1;
+  talk.forEach((n, i) => { if (files[n]) last = i; });
+  const missing = talk.slice(0, Math.max(0, last)).filter(n => !files[n]);
+  if (missing.length) msgs.push(fmt(t.talkGap, { missing: missing.join(', '), last: talk[last] }));
+
+  // Flood Tuber 1.3.0: what the export changes or leaves out
+  if (is13()) {
+    const still = activeSlots().filter(n => formats[n] && formats[n].kind !== 'png');
+    if (still.length) msgs.push(fmt(t.v13Still, { files: still.map(n => `${n}.${formats[n].ext}`).join(', ') }));
+    const skipped = EXTRA_SLOTS.filter(n => files[n]);
+    if (skipped.length) msgs.push(fmt(t.v13Skipped, { files: skipped.join(', ') }));
+  }
+
+  activeSlots().forEach(name => {
+    const f = formats[name];
+    if (!f || !f.animated) return;
+    if (is13() && f.kind !== 'png') return; // exported as a still PNG
+    const frame = f.w * f.h * 4;
+    const total = frame * f.frames;
+    const file = outName(name);
+    if (f.kind === 'png' && frame > APNG_FRAME_LIMIT * NEAR_LIMIT) {
+      msgs.push(fmt(frame > APNG_FRAME_LIMIT ? t.apngFrameOver : t.apngFrameNear, { file, size: formatBytes(frame) }));
+    }
+    if (total > ANIM_TOTAL_LIMIT * NEAR_LIMIT) {
+      msgs.push(fmt(total > ANIM_TOTAL_LIMIT ? t.animTotalOver : t.animTotalNear,
+        { file, frames: f.frames, w: f.w, h: f.h, size: formatBytes(total) }));
+    }
+  });
+
+  const box = document.getElementById('warnings');
+  box.innerHTML = '';
+  msgs.forEach(m => {
+    const li = document.createElement('li');
+    li.textContent = m;
+    box.appendChild(li);
+  });
+  box.hidden = msgs.length === 0;
 }
 
 // ---------- Preview zoom ----------
@@ -751,37 +1144,31 @@ document.getElementById('previewBgReset').addEventListener('click', () => {
 
 /**
  * Rebuilds the preview stack and the per-layer checkboxes from `images`.
- * Layers are stacked in the fixed `order` below (idle at the bottom). The first
+ * Layers are stacked in SLOT_ORDER (idle at the bottom), limited to the slots of the
+ * target version. The first
  * loaded layer sets the size of the stack. Must be called after any change to `images`.
  */
 function updatePreview() {
   stack.innerHTML = '';
   layerControls.innerHTML = '';
 
-  // Stacking order: this list must match the slot names in index.html
-  const order = [
-    'idle.png', 'blink.png', 'action.png',
-    'talk_a.png', 'talk_b.png', 'talk_c.png',
-    'talk_a_blink.png', 'talk_b_blink.png', 'talk_c_blink.png'
-  ];
-
   let firstName = null;
   let z = 1;
-  order.forEach(name => {
+  activeSlots().forEach(name => {
     if (!images[name]) return;
     const { url } = images[name];
     if (firstName === null) firstName = name;
 
     const layerImg = document.createElement('img');
     layerImg.src = url;
-    layerImg.alt = name;
+    layerImg.alt = outName(name);
     layerImg.style.zIndex = z++;
     layerImg.dataset.name = name;
     layerImg.style.opacity = document.getElementById('globalOpacity').value / 100;
     stack.appendChild(layerImg);
 
     const label = document.createElement('label');
-    label.innerHTML = `<input type="checkbox" checked data-name="${name}"> ${name}`;
+    label.innerHTML = `<input type="checkbox" checked data-name="${name}"> ${outName(name)}`;
     label.querySelector('input').addEventListener('change', e => {
       layerImg.style.display = e.target.checked ? 'block' : 'none';
       renderDiff();
@@ -811,7 +1198,7 @@ document.getElementById('globalOpacity').addEventListener('input', e => {
 });
 
 // ---------- Difference view ----------
-// The reference is always idle.png, even when its checkbox is off. The other visible layers
+// The reference is always the idle image, even when its checkbox is off. The other visible layers
 // are composited in stacking order (as in the preview). Each pixel where that composite
 // differs from idle is painted in a strong colour; the unchanged idle is shown faintly.
 const DIFF_TOLERANCE = 40;          // largest channel difference (0-255) still counted as equal
@@ -836,9 +1223,9 @@ function renderDiff() {
   stack.querySelectorAll('canvas.diff-canvas').forEach(c => c.remove());
   stack.classList.toggle('diff-on', diffMode);
   diffStat.textContent = '';
-  if (!diffMode || !images['idle.png']) return;
+  if (!diffMode || !images.idle) return;
 
-  const ref = images['idle.png'].img;
+  const ref = images.idle.img;
   const W = ref.naturalWidth;
   const H = ref.naturalHeight;
   const idle = layerPixels(ref, W, H);
@@ -902,7 +1289,7 @@ function renderDiff() {
   stack.appendChild(c);
 
   diffStat.textContent = `Δ ${(100 * diff / (W * H)).toFixed(1)} %`;
-  diffStat.title = 'Share of pixels that differ from idle.png';
+  diffStat.title = 'Share of pixels that differ from idle';
 }
 
 document.getElementById('diffMode').addEventListener('click', () => {
@@ -920,60 +1307,149 @@ document.getElementById('toggleAll').addEventListener('click', () => {
   });
 });
 
+// ---------- Avatar name ----------
 /**
- * Serialises the settings form into the text of settings.ini.
- * The keys are read by Flood Tuber. Add a key here and in index.html only if
- * Flood Tuber supports it. Values are copied as typed (no validation).
- * Sections follow the sample packages: [General] (name = avatar name, author), [Audio],
- * [Mouth], [Blink], [Action], [Motion]. Values are copied as typed (no validation).
- * @returns {string} the text of settings.ini
+ * Same rule as the plugin for the avatar folder name: drop control characters and
+ * \ / : * ? " < > |, then spaces and dots at both ends. Accents and non-Latin
+ * characters are kept. An empty result means the name is refused.
+ * @param {string} raw
+ * @returns {string}
  */
-function generateSettingsIni() {
-  const get = id => document.getElementById(id).value;
-  const mirror = document.getElementById('mirror').checked ? '1' : '0';
-  const name = document.getElementById('avatarName').value.trim() || 'My Avatar';
-  const author = get('author').trim();
-  return `[General]
-name=${name}
-author=${author}
-mirror=${mirror}
-reference_height=${get('reference_height')}
-
-[Audio]
-threshold=${get('threshold')}
-release_delay=${get('release_delay')}
-
-[Mouth]
-talking_speed=${get('talking_speed')}
-
-[Blink]
-duration=${get('blink_duration')}
-interval_min=${get('blink_interval_min')}
-interval_max=${get('blink_interval_max')}
-
-[Action]
-duration=${get('action_duration')}
-interval_min=${get('action_interval_min')}
-interval_max=${get('action_interval_max')}
-
-[Motion]
-type=${get('motion_type')}
-speed=${get('motion_speed')}
-strength=${get('motion_strength')}
-`;
+function cleanAvatarName(raw) {
+  return raw.replace(/[\u0000-\u001f\u007f\\/:*?"<>|]/g, '').replace(/^[ .]+|[ .]+$/g, '');
 }
 
-// ZIP export: requires idle.png, then writes <avatar name>/<slot files> and settings.ini
-// into a JSZip archive and triggers a download.
+const avatarNameInput = document.getElementById('avatarName');
+avatarNameInput.addEventListener('change', () => {
+  avatarNameInput.value = cleanAvatarName(avatarNameInput.value);
+});
+
+// ---------- Settings values ----------
+// Ranges and number formats of the plugin. `dec` = decimals always written, otherwise integer.
+const SETTING_RULES = {
+  threshold: { min: -60, max: 0, dec: 1 },
+  release_delay: { min: 0, max: 2000 },
+  talking_speed: { min: 0.01, max: 1, dec: 2 },
+  mouth_range: { min: 1, max: 60 },
+  blink_duration: { min: 0 },
+  blink_interval_min: { min: 0 },
+  blink_interval_max: { min: 0 },
+  action_duration: { min: 0 },
+  action_interval_min: { min: 0 },
+  action_interval_max: { min: 0 },
+  motion_speed: { min: 0, max: 500 },
+  motion_strength: { min: 0, max: 50 },
+  reference_height: { min: 64, max: 4096 }
+};
+
+/**
+ * Brings a numeric setting back into its range and format, writes it back into the
+ * field and returns the text for settings.ini. An unreadable value becomes the default.
+ * @param {string} id  input id
+ * @returns {string}
+ */
+function normalizeSetting(id) {
+  const input = document.getElementById(id);
+  const rule = SETTING_RULES[id];
+  let v = parseFloat(input.value);
+  if (!Number.isFinite(v)) v = parseFloat(input.defaultValue);
+  if (rule.min !== undefined) v = Math.max(rule.min, v);
+  if (rule.max !== undefined) v = Math.min(rule.max, v);
+  let text;
+  if (rule.dec) {
+    // At most 3 decimals, and always at least `dec` of them ("-30" -> "-30.0")
+    const [whole, frac = ''] = String(Number(v.toFixed(3))).split('.');
+    text = `${whole}.${frac.padEnd(rule.dec, '0')}`;
+  } else {
+    text = String(Math.round(v));
+  }
+  input.value = text;
+  return text;
+}
+
+Object.keys(SETTING_RULES).forEach(id => {
+  document.getElementById(id).addEventListener('change', () => normalizeSetting(id));
+});
+
+/**
+ * Serialises the settings form into the text of settings.ini.
+ * Sections and keys are read as written by Flood Tuber: [General], [Audio], [Blink],
+ * [Action], [Motion]. Text values stay in English whatever the interface language.
+ * `mirror` and the three [Motion] keys are always written: when a settings.ini exists
+ * without them, the plugin resets them to its defaults.
+ * For Flood Tuber 1.3.0, the keys added in 1.4.0 are not written.
+ * @param {string} name  cleaned avatar name
+ * @returns {string} the text of settings.ini
+ */
+function generateSettingsIni(name) {
+  const num = normalizeSetting;
+  const get = id => document.getElementById(id).value;
+  const v14 = !is13(); // keys added in 1.4.0 are left out for 1.3.0
+
+  const sections = [
+    ['General', [
+      `name=${name}`,
+      `author=${get('author').trim()}`,
+      `mirror=${document.getElementById('mirror').checked ? 'true' : 'false'}`
+    ]],
+    ['Audio', [
+      `threshold=${num('threshold')}`,
+      `release_delay=${num('release_delay')}`,
+      ...(v14 ? [
+        `talking_speed=${num('talking_speed')}`,
+        `mouth_mode=${get('mouth_mode')}`,
+        `mouth_range=${num('mouth_range')}`
+      ] : [])
+    ]],
+    ['Blink', [
+      `duration=${num('blink_duration')}`,
+      `interval_min=${num('blink_interval_min')}`,
+      `interval_max=${num('blink_interval_max')}`
+    ]],
+    ['Action', [
+      `duration=${num('action_duration')}`,
+      `interval_min=${num('action_interval_min')}`,
+      `interval_max=${num('action_interval_max')}`
+    ]],
+    ['Motion', [
+      `type=${get('motion_type')}`,
+      `speed=${num('motion_speed')}`,
+      `strength=${num('motion_strength')}`,
+      ...(v14 ? [`reference_height=${num('reference_height')}`] : [])
+    ]]
+  ];
+  return sections.map(([title, lines]) => `[${title}]\n${lines.join('\n')}\n`).join('\n');
+}
+
+// ZIP export: requires a valid avatar name, the idle image and coherent intervals, then
+// writes <avatar name>/<slot files> and settings.ini into a JSZip archive and downloads it.
 document.getElementById('generateZip').addEventListener('click', async () => {
-  const avatarName = document.getElementById('avatarName').value.trim() || 'My Avatar';
   const btn = document.getElementById('generateZip');
   const loader = document.getElementById('loader');
   const t = translations[currentLang];
 
-  if (!files['idle.png']) {
+  const avatarName = cleanAvatarName(avatarNameInput.value);
+  avatarNameInput.value = avatarName;
+  if (!avatarName) {
+    setStatus(t.nameInvalid, 'bad');
+    avatarNameInput.focus();
+    return;
+  }
+
+  if (!files.idle) {
     setStatus(t.idleRequired, 'bad');
     return;
+  }
+
+  // interval_min must not exceed interval_max
+  for (const [section, prefix] of [['[Blink]', 'blink'], ['[Action]', 'action']]) {
+    const min = Number(normalizeSetting(`${prefix}_interval_min`));
+    const max = Number(normalizeSetting(`${prefix}_interval_max`));
+    if (min > max) {
+      setStatus(fmt(t.intervalError, { section }), 'bad');
+      document.getElementById(`${prefix}_interval_min`).focus();
+      return;
+    }
   }
 
   btn.disabled = true;
@@ -984,19 +1460,25 @@ document.getElementById('generateZip').addEventListener('click', async () => {
     const zip = new JSZip();
     const folder = zip.folder(avatarName);
 
-    // Add images with correct names
-    for (const [name, file] of Object.entries(files)) {
-      folder.file(name, file);
+    // One file per slot: imposed base name, extension of the real format.
+    // For Flood Tuber 1.3.0, a GIF or WebP is written as a still PNG (PNG is all it reads).
+    for (const name of activeSlots()) {
+      if (!files[name]) continue;
+      let data = files[name];
+      if (is13() && formats[name].kind !== 'png') {
+        data = await reencodeAsPng(files[name]);
+        if (!data) throw new Error(outName(name));
+      }
+      folder.file(outName(name), data);
     }
 
-    // Add settings.ini
-    folder.file('settings.ini', generateSettingsIni());
+    folder.file('settings.ini', generateSettingsIni(avatarName));
 
     const blob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${avatarName.replace(/[^a-z0-9]/gi, '_')}_FloodTuber.zip`;
+    a.download = `${avatarName}_FloodTuber.zip`;
     a.click();
     URL.revokeObjectURL(url);
 
@@ -1014,7 +1496,7 @@ document.getElementById('generateZip').addEventListener('click', async () => {
 // Ported from flood_tuber_tick() / select_avatar_texture() (flood-tuber.cpp).
 // No audio in the browser: speech is simulated with random bursts.
 // Simulation state, mutated every animation frame by simTick().
-// state: 'IDLE' (resting), 'TALKING' (mouth animation), 'ACTION' (action.png shown).
+// state: 'IDLE' (resting), 'TALKING' (mouth animation), 'ACTION' (action image shown).
 // Timers are in seconds. `blinking` is independent of the main state.
 const sim = {
   rafId: null,
@@ -1022,7 +1504,7 @@ const sim = {
   state: 'IDLE',          // IDLE | TALKING | ACTION
   holdTimer: 0,           // time since last speech (release_delay)
   talkAnimTimer: 0,
-  frameIdx: 0,            // 0, 1, 2 -> talk_a, talk_b, talk_c
+  frameIdx: 0,            // index in TALK: 0 -> talk_a … 5 -> talk_f
   actionTimer: 0,
   nextAction: 0,
   blinkTimer: 0,
@@ -1032,6 +1514,9 @@ const sim = {
   speaking: false,
   speakTimer: 0
 };
+
+// Longest wait, in seconds of silence, before the first action of a simulation
+const SIM_FIRST_ACTION = 2;
 
 // Whole-second range, as in the plugin: min + a random draw in [0, (max - min))
 function randomInterval(minS, maxS) {
@@ -1047,7 +1532,10 @@ function simParams() {
   const num = id => parseFloat(document.getElementById(id).value) || 0;
   return {
     releaseDelay: num('release_delay') / 1000,
-    talkInterval: Math.max(0.01, num('talking_speed')),
+    // 1.3.0 has neither setting: fixed speed, plain cycle
+    talkInterval: is13() ? 0.1 : Math.max(0.01, num('talking_speed')),
+    mouthMode: is13() ? 'Cycle' : document.getElementById('mouth_mode').value,
+    mouthRange: Math.max(1, num('mouth_range')),
     blinkDuration: num('blink_duration') / 1000,
     blinkMin: num('blink_interval_min') / 1000,
     blinkMax: num('blink_interval_max') / 1000,
@@ -1065,29 +1553,36 @@ function hasLayer(name) {
   return !!images[name];
 }
 
+// The talk cycle runs from A to the last talk image defined (3 steps when none is loaded)
+function talkFrameCount() {
+  if (is13()) return 3; // 1.3.0 always cycles A, B, C
+  let last = -1;
+  TALK.forEach((n, i) => { if (hasLayer(n)) last = i; });
+  return last < 0 ? 3 : last + 1;
+}
+
 // Equivalent of select_avatar_texture(): picks the layer to display
 function pickLayer() {
-  if (sim.state === 'ACTION' && hasLayer('action.png')) return 'action.png';
+  if (sim.state === 'ACTION' && hasLayer('action')) return 'action';
 
   if (sim.state === 'TALKING') {
-    const talk = ['talk_a.png', 'talk_b.png', 'talk_c.png'];
-    const talkBlink = ['talk_a_blink.png', 'talk_b_blink.png', 'talk_c_blink.png'];
-    let i = sim.frameIdx;
-    // Fallbacks: if talk_c is missing, use talk_b; if talk_b is missing, use talk_a
-    if (!hasLayer(talk[i]) && i === 2) i = 1;
-    if (!hasLayer(talk[i]) && i === 1) i = 0;
+    // A missing step shows the previous image
+    let i = Math.min(sim.frameIdx, talkFrameCount() - 1);
+    while (i > 0 && !hasLayer(TALK[i])) i--;
+    const talk = TALK[i];
+    const talkBlink = talk + '_blink';
 
     let pick = null;
-    if (sim.blinking && hasLayer(talkBlink[i])) pick = talkBlink[i];
-    else if (hasLayer(talk[i])) pick = talk[i];
+    if (sim.blinking && hasLayer(talkBlink)) pick = talkBlink;
+    else if (hasLayer(talk)) pick = talk;
     // Blink fallback when the "talking + blink" variant is missing
-    if (sim.blinking && !hasLayer(talkBlink[i]) && hasLayer('blink.png')) pick = 'blink.png';
+    if (sim.blinking && !hasLayer(talkBlink) && hasLayer('blink')) pick = 'blink';
 
-    return pick || 'idle.png';
+    return pick || 'idle';
   }
 
-  if (sim.blinking && hasLayer('blink.png')) return 'blink.png';
-  return 'idle.png';
+  if (sim.blinking && hasLayer('blink')) return 'blink';
+  return 'idle';
 }
 
 function simStateText() {
@@ -1099,8 +1594,9 @@ function simStateText() {
 // One simulation step (same order as flood_tuber_tick)
 function simTick(dt, p) {
   // Simulated speech: alternating bursts / silences
+  // A running action is left to finish before the next burst, so it can be seen in full.
   sim.speakTimer -= dt;
-  if (sim.speakTimer <= 0) {
+  if (sim.speakTimer <= 0 && sim.state !== 'ACTION') {
     sim.speaking = !sim.speaking;
     sim.speakTimer = sim.speaking ? 1.2 + Math.random() * 2.3 : 0.6 + Math.random() * 1.9;
   }
@@ -1118,7 +1614,15 @@ function simTick(dt, p) {
   if (sim.state === 'TALKING') {
     sim.talkAnimTimer += dt;
     if (sim.talkAnimTimer > p.talkInterval) {
-      sim.frameIdx = (sim.frameIdx + 1) % 3;
+      const count = talkFrameCount();
+      if (p.mouthMode === 'Volume') {
+        // No audio here: a random level above the threshold stands in for the microphone.
+        // The louder the level within mouth_range, the further the image in the cycle.
+        const level = Math.random() * p.mouthRange;
+        sim.frameIdx = Math.min(count - 1, Math.floor(level / p.mouthRange * count));
+      } else {
+        sim.frameIdx = (sim.frameIdx + 1) % count;
+      }
       sim.talkAnimTimer = 0;
     }
   }
@@ -1138,8 +1642,8 @@ function simTick(dt, p) {
     }
   }
 
-  // Blinks (only if blink.png is loaded)
-  if (hasLayer('blink.png')) {
+  // Blinks (only if a blink image is loaded)
+  if (hasLayer('blink')) {
     sim.blinkTimer += dt;
     if (!sim.blinking && sim.blinkTimer >= sim.nextBlink) {
       sim.blinking = true;
@@ -1194,11 +1698,11 @@ function updateSimLabel() {
 }
 
 /**
- * Starts the "Simulate pattern" loop (requestAnimationFrame). Requires idle.png.
+ * Starts the "Simulate pattern" loop (requestAnimationFrame). Requires the idle image.
  * Resets the simulation state, then calls simTick() once per frame.
  */
 function startSimulation() {
-  if (!files['idle.png']) {
+  if (!files.idle) {
     setStatus(translations[currentLang].idleRequired, 'bad');
     return;
   }
@@ -1209,7 +1713,9 @@ function startSimulation() {
     talkAnimTimer: 0,
     frameIdx: 0,
     actionTimer: 0,
-    nextAction: p.actionMin,
+    // Demo: the first action comes after about 2 s of silence, whatever the wait settings
+    // (the plugin's default wait is 60 s or more). The next ones follow the settings.
+    nextAction: Math.min(p.actionMin, SIM_FIRST_ACTION),
     blinkTimer: 0,
     blinking: false,
     nextBlink: p.blinkMin,
@@ -1260,7 +1766,9 @@ document.getElementById('simulate').addEventListener('click', () => {
 // Works on a copy of the image's pixels (wand.data). Two masks are kept:
 //   wand.flood   pixels removed by the wand (flood fill or global colour match)
 //   wand.manual  pixels erased with the eraser tools
-// Their union (combinedMask) is rendered as transparency. "Apply" writes the result back
+// Their union (combinedMask) is rendered as transparency. A third mask, wand.restore, holds
+// the pixels the difference eraser replaced with the model's pixels (wand.refData).
+// "Apply" writes the result back
 // through loadFile(); "Restore original" uses originals[name].
 // Undo/redo store snapshots of both masks (see pushHistory / undoWand / redoWand).
 const wandDialog = document.getElementById('wandDialog');
@@ -1281,39 +1789,94 @@ const wandZoomLabel = document.getElementById('wandZoomLabel');
 
 // flood: area from the wand; manual: pixels erased with the eraser
 // mask : union of both (computed in renderWand)
+// restore: pixels given back the model's colour by the difference eraser
 const wand = {
   name: null, data: null, w: 0, h: 0,
-  flood: null, manual: null, mask: null, removed: 0,
-  seeds: [], animated: false, // seeds: pixel indices of the clicked points (Ctrl+click adds one)
+  flood: null, manual: null, restore: null, mask: null, removed: 0,
+  refName: null, refData: null, diffCache: null, // model image for the difference eraser
+  resized: false, // true when the image was scaled to the model's size
+  seeds: [], // pixel indices of the clicked points (Ctrl+click adds one)
   tool: 'flood', stroke: null, history: [], redo: [], zoom: 0 // zoom 0 = fit to window
 };
 const originals = {}; // name -> original File, for "Restore original"
 
+const wandRef = document.getElementById('wandRef');
+
+// Largest difference between two aspect ratios still treated as "the same shape": the image
+// is then stretched to the exact size instead of getting a margin of a few pixels.
+const SAME_SHAPE = 0.02;
+
 /**
- * Opens the magic wand editor for slot `name` with a fresh copy of its pixels.
- * Animated GIF/APNG are detected here: only the first frame is edited.
- * @param {string} name  slot file name
+ * Pixels of `img` brought to a W x H canvas. The whole image is scaled to fit and centred;
+ * when its shape differs from W x H, the leftover margins stay transparent.
+ * An image that already is W x H is copied untouched.
  */
-function openWand(name) {
-  if (!images[name]) return;
-  const img = images[name].img;
-  const w = img.naturalWidth, h = img.naturalHeight;
+function fittedPixels(img, W, H) {
   const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
+  c.width = W;
+  c.height = H;
   const cx = c.getContext('2d', { willReadFrequently: true });
-  cx.drawImage(img, 0, 0);
+  const sx = W / img.naturalWidth;
+  const sy = H / img.naturalHeight;
+  let dw = W, dh = H;
+  if (Math.abs(sx / sy - 1) > SAME_SHAPE) {
+    const s = Math.min(sx, sy);
+    dw = img.naturalWidth * s;
+    dh = img.naturalHeight * s;
+  }
+  cx.imageSmoothingQuality = 'high';
+  cx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  return cx.getImageData(0, 0, W, H);
+}
 
-  const f = files[name];
+/**
+ * (Re)loads the editor's pixels for wand.name against the model `refName`, and clears
+ * every edit. The model sets the working size: the edited image is scaled to the model's
+ * size (see fittedPixels), so both line up and the saved image has the model's size.
+ * Without a model, the image keeps its own size.
+ * @param {string|null} refName  slot base name of the model, or null for none
+ */
+function loadWandPixels(refName) {
+  const img = images[wand.name].img;
+  const ref = refName && images[refName] ? images[refName].img : null;
+  const w = (ref || img).naturalWidth;
+  const h = (ref || img).naturalHeight;
   Object.assign(wand, {
-    name, data: cx.getImageData(0, 0, w, h), w, h,
-    flood: null, manual: null, mask: null, removed: 0, seeds: [],
-    history: [], redo: [], stroke: null, grow: 0,
-    animated: !!f && (f.type === 'image/gif' || /\.(gif|apng)$/i.test(f.name))
+    data: fittedPixels(img, w, h), w, h,
+    refName: ref ? refName : null,
+    refData: ref ? fittedPixels(ref, w, h).data : null,
+    diffCache: null,
+    resized: w !== img.naturalWidth || h !== img.naturalHeight,
+    flood: null, manual: null, restore: null, mask: null, removed: 0, seeds: [],
+    history: [], redo: [], stroke: null
   });
-
   wandCanvas.width = w;
   wandCanvas.height = h;
+}
+
+/**
+ * Opens the editor for slot `name` with a fresh copy of its pixels.
+ * Not available for a GIF or an animated file (see canEdit).
+ * The model of the difference eraser is idle by default, or the first other image loaded.
+ * @param {string} name  slot base name
+ */
+function openWand(name) {
+  if (!images[name] || !canEdit(name)) return;
+  wand.name = name;
+  wand.grow = 0;
+
+  const choices = SLOT_ORDER.filter(n => n !== name && images[n]);
+  wandRef.innerHTML = '';
+  choices.forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n;
+    opt.textContent = outName(n);
+    wandRef.appendChild(opt);
+  });
+  wandRef.closest('label').hidden = choices.length === 0;
+  document.querySelector('.tool[data-tool="diff"]').disabled = choices.length === 0;
+
+  loadWandPixels(wandRef.value || null);
   wandGlobal.checked = false;
   wandTol.value = 20;
   wandTolOut.textContent = wandTol.value;
@@ -1395,6 +1958,33 @@ function combinedMask() {
   return m;
 }
 
+/**
+ * Pixels of the edited image that differ from the model, at the current tolerance
+ * (each RGBA channel may differ by tolerance x 2.55). Cached until the tolerance changes.
+ * @returns {Uint8Array|null} null when there is no model
+ */
+function diffMask() {
+  if (!wand.refData) return null;
+  const tol = Number(wandTol.value);
+  if (wand.diffCache && wand.diffCache.tol === tol) return wand.diffCache.mask;
+  const d = wand.data.data;
+  const r = wand.refData;
+  const thr = tol * 2.55;
+  const mask = new Uint8Array(wand.w * wand.h);
+  for (let i = 0, q = 0; i < mask.length; i++, q += 4) {
+    const da = d[q + 3], ra = r[q + 3];
+    if (da < 8 && ra < 8) continue; // empty on both sides
+    if (Math.abs(da - ra) > thr ||
+        (da >= 8 && ra >= 8 && (Math.abs(d[q] - r[q]) > thr ||
+                                Math.abs(d[q + 1] - r[q + 1]) > thr ||
+                                Math.abs(d[q + 2] - r[q + 2]) > thr))) {
+      mask[i] = 1;
+    }
+  }
+  wand.diffCache = { tol, mask };
+  return mask;
+}
+
 // Edge softening: colour distance (RGB) over which a pixel next to the removed area
 // goes from fully transparent (background colour) to fully opaque (foreground).
 // Lower = sharper, higher = softer. 215 is about half the distance between white and black.
@@ -1446,10 +2036,25 @@ function finalMask() {
  *   close their colour is to the background colour. This removes the light
  *   anti-aliased halo around outlines while keeping the dark outline itself.
  * The background colour is the mean colour of the removed pixels.
+ * - Pixels touched by the difference eraser (wand.restore) take the model's pixel.
  * @param {Uint8Array|null} mask
  * @returns {ImageData}
  */
 function buildOutput(mask) {
+  const out = buildMasked(mask);
+  if (wand.restore && wand.refData) {
+    const o = out.data;
+    const r = wand.refData;
+    for (let i = 0, q = 0; i < wand.restore.length; i++, q += 4) {
+      if (!wand.restore[i]) continue;
+      o[q] = r[q]; o[q + 1] = r[q + 1]; o[q + 2] = r[q + 2]; o[q + 3] = r[q + 3];
+    }
+  }
+  return out;
+}
+
+// Transparency part of buildOutput(): removed pixels and softened edges
+function buildMasked(mask) {
   const { w, h } = wand;
   const src = wand.data.data;
   const out = new ImageData(new Uint8ClampedArray(src), w, h);
@@ -1496,13 +2101,32 @@ function renderWand() {
   }
   wand.mask = m;
   wand.removed = removed;
-  wandCtx.putImageData(out, 0, 0);
+
+  // Difference eraser: the pixels that still differ from the model are tinted on screen
+  // only. The saved image comes from buildOutput(), never from the canvas.
+  const diff = wand.tool === 'diff' ? diffMask() : null;
+  let left = 0;
+  let shown = out;
+  if (diff) {
+    shown = new ImageData(new Uint8ClampedArray(out.data), w, h);
+    const sd = shown.data;
+    for (let i = 0, q = 0; i < diff.length; i++, q += 4) {
+      if (!diff[i] || (wand.restore && wand.restore[i])) continue;
+      if (sd[q + 3] < 8 && wand.refData[q + 3] < 8) continue; // removed here, empty in the model
+      left++;
+      sd[q] = DIFF_COLOR[0] * 0.6 + sd[q] * 0.4;
+      sd[q + 1] = DIFF_COLOR[1] * 0.6 + sd[q + 1] * 0.4;
+      sd[q + 2] = DIFF_COLOR[2] * 0.6 + sd[q + 2] * 0.4;
+      sd[q + 3] = Math.max(sd[q + 3], 170);
+    }
+  }
+  wandCtx.putImageData(shown, 0, 0);
 
   const t = translations[currentLang];
   const parts = [];
   if (removed > 0) parts.push(t.wandInfo.replace('{n}', removed));
   if (wand.seeds.length > 1) parts.push(t.wandZones.replace('{n}', wand.seeds.length));
-  if (wand.animated) parts.push(t.wandAnimWarn);
+  if (diff) parts.push(fmt(t.diffLeft, { n: left, ref: outName(wand.refName) }));
   wandInfo.textContent = parts.join(' · ');
 }
 
@@ -1533,6 +2157,7 @@ function snapshotWand() {
   return {
     flood: wand.flood ? wand.flood.slice() : null,
     manual: wand.manual ? wand.manual.slice() : null,
+    restore: wand.restore ? wand.restore.slice() : null,
     seeds: wand.seeds.slice()
   };
 }
@@ -1540,6 +2165,7 @@ function snapshotWand() {
 function restoreWand(s) {
   wand.flood = s.flood;
   wand.manual = s.manual;
+  wand.restore = s.restore;
   wand.seeds = s.seeds.slice();
   renderWand();
   updateUndoButtons();
@@ -1575,7 +2201,16 @@ function setTool(tool) {
   document.querySelectorAll('.tool').forEach(b => {
     b.setAttribute('aria-pressed', String(b.dataset.tool === tool));
   });
+  if (wand.data) renderWand(); // the difference tint depends on the tool
 }
+
+// Changing the model reloads the pixels: the working size and the differences depend on it
+wandRef.addEventListener('change', () => {
+  loadWandPixels(wandRef.value || null);
+  updateUndoButtons();
+  renderWand();
+  applyZoom();
+});
 
 function canvasPoint(e) {
   const rect = wandCanvas.getBoundingClientRect();
@@ -1585,14 +2220,22 @@ function canvasPoint(e) {
   };
 }
 
-// Erases a disc of pixels; in "magic eraser" mode, only the start point's colour
+// Erases a disc of pixels; in "magic eraser" mode, only the start point's colour.
+// In "difference eraser" mode, nothing is erased: the pixels of the disc that differ from
+// the model are marked to take the model's pixel, the others are left as they are.
 function paintAt(x, y) {
   const { w, h } = wand;
   const r = Number(wandSize.value);
   const r2 = r * r;
   const d = wand.data.data;
   const thr = Number(wandTol.value) * 2.55;
-  if (!wand.manual) wand.manual = new Uint8Array(w * h);
+  const diff = wand.tool === 'diff' ? diffMask() : null;
+  if (wand.tool === 'diff') {
+    if (!diff) return;
+    if (!wand.restore) wand.restore = new Uint8Array(w * h);
+  } else if (!wand.manual) {
+    wand.manual = new Uint8Array(w * h);
+  }
   const magic = wand.tool === 'magic';
   const seed = wand.stroke ? wand.stroke.seed : 0;
 
@@ -1604,6 +2247,10 @@ function paintAt(x, y) {
       const px = x + dx;
       if (px < 0 || px >= w) continue;
       const i = py * w + px;
+      if (diff) {
+        if (diff[i]) wand.restore[i] = 1;
+        continue;
+      }
       if (magic && !matches(d, i, seed, thr)) continue;
       wand.manual[i] = 1;
     }
@@ -1670,7 +2317,7 @@ document.querySelectorAll('.tool').forEach(b => {
   b.addEventListener('click', () => setTool(b.dataset.tool));
 });
 
-// ---------- Brush preview (Eraser / Magic eraser) ----------
+// ---------- Brush preview (Eraser / Magic eraser / Difference eraser) ----------
 // A translucent circle follows the pointer and shows the area the brush will clear,
 // at the current Size (in image pixels, scaled to the zoom level on screen).
 const brushCursor = document.createElement('div');
@@ -1681,7 +2328,7 @@ let brushPointer = null; // last pointer position over the canvas (client coordi
 
 /** Shows, moves or hides the brush circle depending on the tool and pointer position. */
 function updateBrushCursor() {
-  const isBrush = wand.tool === 'eraser' || wand.tool === 'magic';
+  const isBrush = wand.tool === 'eraser' || wand.tool === 'magic' || wand.tool === 'diff';
   if (!isBrush || !brushPointer || !wand.data) {
     brushCursor.hidden = true;
     return;
@@ -1804,7 +2451,9 @@ document.getElementById('wandApply').addEventListener('click', () => {
   const name = wand.name;
   if (!name) return;
   const m = finalMask();
-  if (!m || !m.some(v => v)) {
+  // Nothing to save: no pixel removed, none taken from the model, size unchanged
+  const changed = (m && m.some(v => v)) || (wand.restore && wand.restore.some(v => v)) || wand.resized;
+  if (!changed) {
     wandDialog.close();
     return;
   }
@@ -1816,7 +2465,7 @@ document.getElementById('wandApply').addEventListener('click', () => {
   c.getContext('2d').putImageData(out, 0, 0);
   c.toBlob(blob => {
     if (!originals[name]) originals[name] = files[name];
-    loadFile(name, new File([blob], name, { type: 'image/png' }));
+    loadFile(name, new File([blob], `${name}.png`, { type: 'image/png' }));
     wandDialog.close();
     setStatus(translations[currentLang].wandDone, 'ok');
   }, 'image/png');
@@ -1833,6 +2482,8 @@ wandRestoreBtn.addEventListener('click', () => {
 });
 
 // Buttons created here did not exist yet during the first setLanguage call
+appReady = true;
+applyTarget();
 setLanguage(currentLang);
 
 // ---------- Tutorials ----------
